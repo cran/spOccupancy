@@ -6,11 +6,11 @@
 \title{Methods for spMsPGOcc Object}
 
 \description{
-  Methods for extracting information from fitted multispecies spatial occupancy (\code{spMsPGOcc}) model.
+  Methods for extracting information from fitted multi-species spatial occupancy (\code{spMsPGOcc}) model.
 }
 
 \usage{
-\method{summary}{spMsPGOcc}(object, level, quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975), 
+\method{summary}{spMsPGOcc}(object, level, quantiles = c(0.025, 0.5, 0.975), 
 	 digits = max(3L, getOption("digits") - 3L), \dots)
 \method{print}{spMsPGOcc}(x, \dots)
 }

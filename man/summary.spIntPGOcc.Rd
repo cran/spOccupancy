@@ -6,11 +6,11 @@
 \title{Methods for spIntPGOcc Object}
 
 \description{
-  Methods for extracting information from fitted single species integrated occupancy (\code{spIntPGOcc}) model.
+  Methods for extracting information from fitted single-species integrated occupancy (\code{spIntPGOcc}) model.
 }
 
 \usage{
-\method{summary}{spIntPGOcc}(object, quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975), 
+\method{summary}{spIntPGOcc}(object, quantiles = c(0.025, 0.5, 0.975), 
 	digits = max(3L, getOption("digits") - 3L), \dots)
 \method{print}{spIntPGOcc}(x, \dots)
 }

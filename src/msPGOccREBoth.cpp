@@ -30,7 +30,8 @@ extern "C" {
 	             SEXP sigmaSqPsiA_r, SEXP sigmaSqPsiB_r, 
 	             SEXP sigmaSqPA_r, SEXP sigmaSqPB_r, 
 	             SEXP nSamples_r, SEXP nThreads_r, SEXP verbose_r, SEXP nReport_r, 
-	             SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r){
+	             SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r, SEXP currChain_r, 
+		     SEXP nChain_r){
    
     /**********************************************************************
      * Initial constants
@@ -57,10 +58,16 @@ extern "C" {
     int *XpRE = INTEGER(XpRE_r); 
     double *lambdaPsi = REAL(lambdaPsi_r); 
     double *lambdaP = REAL(lambdaP_r); 
+    int pOcc = INTEGER(pocc_r)[0];
+    int pDet = INTEGER(pdet_r)[0];
+    int ppDet = pDet * pDet;
+    int ppOcc = pOcc * pOcc; 
     double *muBetaComm = REAL(muBetaComm_r); 
     double *muAlphaComm = REAL(muAlphaComm_r); 
-    double *SigmaBetaCommInv = REAL(SigmaBetaComm_r); 
-    double *SigmaAlphaCommInv = REAL(SigmaAlphaComm_r); 
+    double *SigmaBetaCommInv = (double *) R_alloc(ppOcc, sizeof(double));   
+    F77_NAME(dcopy)(&ppOcc, REAL(SigmaBetaComm_r), &inc, SigmaBetaCommInv, &inc);
+    double *SigmaAlphaCommInv = (double *) R_alloc(ppDet, sizeof(double));   
+    F77_NAME(dcopy)(&ppDet, REAL(SigmaAlphaComm_r), &inc, SigmaAlphaCommInv, &inc);
     double *tauSqBetaA = REAL(tauSqBetaA_r); 
     double *tauSqBetaB = REAL(tauSqBetaB_r); 
     double *tauSqAlphaA = REAL(tauSqAlphaA_r); 
@@ -69,8 +76,6 @@ extern "C" {
     double *sigmaSqPsiB = REAL(sigmaSqPsiB_r); 
     double *sigmaSqPA = REAL(sigmaSqPA_r); 
     double *sigmaSqPB = REAL(sigmaSqPB_r); 
-    int pOcc = INTEGER(pocc_r)[0];
-    int pDet = INTEGER(pdet_r)[0];
     int pOccRE = INTEGER(pOccRE_r)[0]; 
     int pDetRE = INTEGER(pDetRE_r)[0]; 
     int nOccRE = INTEGER(nOccRE_r)[0]; 
@@ -91,8 +96,9 @@ extern "C" {
     int nThin = INTEGER(nThin_r)[0]; 
     int nBurn = INTEGER(nBurn_r)[0]; 
     int nPost = INTEGER(nPost_r)[0]; 
+    int currChain = INTEGER(currChain_r)[0];
+    int nChain = INTEGER(nChain_r)[0];
     int status = 0; 
-    double *z = REAL(zStarting_r); 
     int thinIndx = 0;
     int sPost = 0;  
 
@@ -109,19 +115,25 @@ extern "C" {
      * Print Information 
      * *******************************************************************/
     if(verbose){
-      Rprintf("----------------------------------------\n");
-      Rprintf("\tModel description\n");
-      Rprintf("----------------------------------------\n");
-      Rprintf("Multispecies Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites and %i species.\n\n", J, N);
-      Rprintf("Number of MCMC samples: %i\n", nSamples);
-      Rprintf("Burn-in: %i \n", nBurn); 
-      Rprintf("Thinning Rate: %i \n", nThin); 
-      Rprintf("Total Posterior Samples: %i \n\n", nPost); 
+      if (currChain == 1) {
+        Rprintf("----------------------------------------\n");
+        Rprintf("\tModel description\n");
+        Rprintf("----------------------------------------\n");
+        Rprintf("Multispecies Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites and %i species.\n\n", J, N);
+        Rprintf("Samples per Chain: %i \n", nSamples);
+        Rprintf("Burn-in: %i \n", nBurn); 
+        Rprintf("Thinning Rate: %i \n", nThin); 
+	Rprintf("Number of Chains: %i \n", nChain);
+        Rprintf("Total Posterior Samples: %i \n\n", nPost * nChain); 
 #ifdef _OPENMP
-      Rprintf("\nSource compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
+        Rprintf("\nSource compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
 #else
-      Rprintf("Source not compiled with OpenMP support.\n\n");
+        Rprintf("Source not compiled with OpenMP support.\n\n");
 #endif
+      }
+      Rprintf("----------------------------------------\n");
+      Rprintf("\tChain %i\n", currChain);
+      Rprintf("----------------------------------------\n");
       Rprintf("Sampling ... \n");
     }
 
@@ -134,8 +146,6 @@ extern "C" {
     int nOccREN = nOccRE * N; 
     int nDetREN = nDetRE * N; 
     int JN = J * N;
-    int ppDet = pDet * pDet;
-    int ppOcc = pOcc * pOcc; 
     int JpOcc = J * pOcc; 
     int nObspDet = nObs * pDet;
     double tmp_0; 
@@ -184,6 +194,9 @@ extern "C" {
     // Latent detection random effects
     double *alphaStar = (double *) R_alloc(nDetREN, sizeof(double)); 
     F77_NAME(dcopy)(&nDetREN, REAL(alphaStarStarting_r), &inc, alphaStar, &inc); 
+    // Latent Occurrence
+    double *z = (double *) R_alloc(JN, sizeof(double));   
+    F77_NAME(dcopy)(&JN, REAL(zStarting_r), &inc, z, &inc);
     // Auxiliary variables
     double *omegaDet = (double *) R_alloc(nObs, sizeof(double));
     double *omegaOcc = (double *) R_alloc(J, sizeof(double));

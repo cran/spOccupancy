@@ -23,7 +23,8 @@ extern "C" {
 	       SEXP sigmaSqA_r, SEXP sigmaSqB_r, SEXP nuA_r, SEXP nuB_r, 
 	       SEXP tuning_r, SEXP covModel_r, SEXP nBatch_r, 
 	       SEXP batchLength_r, SEXP acceptRate_r, SEXP nThreads_r, SEXP verbose_r, 
-	       SEXP nReport_r, SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r){
+	       SEXP nReport_r, SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r, 
+	       SEXP currChain_r, SEXP nChain_r){
    
     /**********************************************************************
      * Initial constants
@@ -49,22 +50,30 @@ extern "C" {
     double *X = REAL(X_r);
     double *coordsD = REAL(coordsD_r); 
     double *Xp = REAL(Xp_r);
+    int pOcc = INTEGER(pocc_r)[0];
+    int pDet = INTEGER(pdet_r)[0];
+    int ppDet = pDet * pDet;
+    int ppOcc = pOcc * pOcc; 
     // Priors
-    double *muBeta = REAL(muBeta_r); 
-    double *muAlpha = REAL(muAlpha_r); 
-    double *SigmaBetaInv = REAL(SigmaBeta_r); 
-    double *SigmaAlphaInv = REAL(SigmaAlpha_r); 
+    double *muBeta = (double *) R_alloc(pOcc, sizeof(double));   
+    F77_NAME(dcopy)(&pOcc, REAL(muBeta_r), &inc, muBeta, &inc);
+    double *muAlpha = (double *) R_alloc(pDet, sizeof(double));   
+    F77_NAME(dcopy)(&pDet, REAL(muAlpha_r), &inc, muAlpha, &inc);
+    double *SigmaBetaInv = (double *) R_alloc(ppOcc, sizeof(double));   
+    F77_NAME(dcopy)(&ppOcc, REAL(SigmaBeta_r), &inc, SigmaBetaInv, &inc);
+    double *SigmaAlphaInv = (double *) R_alloc(ppDet, sizeof(double));   
+    F77_NAME(dcopy)(&ppDet, REAL(SigmaAlpha_r), &inc, SigmaAlphaInv, &inc);
     double phiA = REAL(phiA_r)[0];
     double phiB = REAL(phiB_r)[0]; 
     double nuA = REAL(nuA_r)[0]; 
     double nuB = REAL(nuB_r)[0]; 
     double sigmaSqA = REAL(sigmaSqA_r)[0]; 
     double sigmaSqB = REAL(sigmaSqB_r)[0]; 
+    // This will overwrite the starting tuning values with the 
+    // adapted tuning values after each subsequent chain. 
     double *tuning = REAL(tuning_r); 
     int covModel = INTEGER(covModel_r)[0];
     std::string corName = getCorName(covModel);
-    int pOcc = INTEGER(pocc_r)[0];
-    int pDet = INTEGER(pdet_r)[0];
     int J = INTEGER(J_r)[0];
     double *K = REAL(K_r); 
     int nObs = INTEGER(nObs_r)[0];
@@ -75,10 +84,11 @@ extern "C" {
     int nThin = INTEGER(nThin_r)[0];
     int nBurn = INTEGER(nBurn_r)[0]; 
     int nPost = INTEGER(nPost_r)[0]; 
+    int currChain = INTEGER(currChain_r)[0];
+    int nChain = INTEGER(nChain_r)[0];
     double acceptRate = REAL(acceptRate_r)[0];
     int nThreads = INTEGER(nThreads_r)[0];
     int verbose = INTEGER(verbose_r)[0];
-    double *z = REAL(zStarting_r); 
     int nReport = INTEGER(nReport_r)[0];
     int thinIndx = 0; 
     int sPost = 0; 
@@ -96,21 +106,27 @@ extern "C" {
      * Print Information 
      * *******************************************************************/
     if(verbose){
-      Rprintf("----------------------------------------\n");
-      Rprintf("\tModel description\n");
-      Rprintf("----------------------------------------\n");
-      Rprintf("Spatial Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites.\n\n", J);
-      Rprintf("Number of MCMC samples: %i (%i batches of length %i)\n", nSamples, nBatch, batchLength);
-      Rprintf("Burn-in: %i \n", nBurn); 
-      Rprintf("Thinning Rate: %i \n", nThin); 
-      Rprintf("Total Posterior Samples: %i \n\n", nPost); 
-      Rprintf("Using the %s spatial correlation model.\n\n", corName.c_str());
+      if (currChain == 1) {
+        Rprintf("----------------------------------------\n");
+        Rprintf("\tModel description\n");
+        Rprintf("----------------------------------------\n");
+        Rprintf("Spatial Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites.\n\n", J);
+        Rprintf("Samples per chain: %i (%i batches of length %i)\n", nSamples, nBatch, batchLength);
+        Rprintf("Burn-in: %i \n", nBurn); 
+        Rprintf("Thinning Rate: %i \n", nThin); 
+        Rprintf("Number of Chains: %i \n", nChain);
+        Rprintf("Total Posterior Samples: %i \n\n", nPost * nChain); 
+        Rprintf("Using the %s spatial correlation model.\n\n", corName.c_str());
 #ifdef _OPENMP
-      Rprintf("Source compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
+        Rprintf("Source compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
 #else
-      Rprintf("Source not compiled with OpenMP support.\n\n");
+        Rprintf("Source not compiled with OpenMP support.\n\n");
 #endif
-      Rprintf("Adaptive Metropolis with target acceptance rate: %.1f\n", 100*acceptRate);
+        Rprintf("Adaptive Metropolis with target acceptance rate: %.1f\n", 100*acceptRate);
+      }
+      Rprintf("----------------------------------------\n");
+      Rprintf("\tChain %i\n", currChain);
+      Rprintf("----------------------------------------\n");
       Rprintf("Sampling ... \n");
 
     }
@@ -124,6 +140,9 @@ extern "C" {
     F77_NAME(dcopy)(&pDet, REAL(alphaStarting_r), &inc, alpha, &inc);
     double *w = (double *) R_alloc(J, sizeof(double));   
     F77_NAME(dcopy)(&J, REAL(wStarting_r), &inc, w, &inc);
+    // Latent Occurrence
+    double *z = (double *) R_alloc(J, sizeof(double));   
+    F77_NAME(dcopy)(&J, REAL(zStarting_r), &inc, z, &inc);
     double nu = REAL(nuStarting_r)[0]; 
     double *omegaDet = (double *) R_alloc(nObs, sizeof(double));
     double *omegaOcc = (double *) R_alloc(J, sizeof(double));
@@ -148,8 +167,6 @@ extern "C" {
     /**********************************************************************
      * Other initial starting stuff
      * *******************************************************************/
-    int ppDet = pDet * pDet;
-    int ppOcc = pOcc * pOcc; 
     int JpOcc = J * pOcc; 
     int JJ = J * J; 
     int nObspDet = nObs * pDet;

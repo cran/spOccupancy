@@ -23,8 +23,8 @@ ppcOcc <- function(object, fit.stat, group, ...) {
   if (missing(fit.stat)) {
     stop("error: fit.stat must be specified")
   }
-  if (!tolower(fit.stat) %in% c('chi-square', 'freeman-tukey')) {
-    stop("error: fit.stat must be either 'chi-square' or 'freeman-tukey'")
+  if (!tolower(fit.stat) %in% c('chi-squared', 'freeman-tukey', 'chi-square')) {
+    stop("error: fit.stat must be either 'chi-squared' or 'freeman-tukey'")
   }
   fit.stat <- tolower(fit.stat)
   # Group -----------------------------
@@ -73,7 +73,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       det.prob <- logit.inv(X.p %*% t(alpha.samples))
     }
     det.prob <- array(det.prob, dim(y.rep.samples))
-    n.samples <- object$n.post
+    n.samples <- object$n.post * object$n.chains
     fit.y <- rep(NA, n.samples)
     fit.y.rep <- rep(NA, n.samples)
     e <- 0.0001
@@ -83,7 +83,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       y.rep.grouped <- apply(y.rep.samples, c(1, 2), sum, na.rm = TRUE)
       fit.big.y.rep <- matrix(NA, length(y.grouped), n.samples)
       fit.big.y <- matrix(NA, length(y.grouped), n.samples)
-      if (fit.stat == 'chi-square') {
+      if (fit.stat %in% c('chi-squared', 'chi-square')) {
         for (i in 1:n.samples) {
           E.grouped <- apply(det.prob[i, , , drop = FALSE] * z.samples[i, ], 2, sum, na.rm = TRUE)
           fit.big.y[, i] <- (y.grouped - E.grouped)^2 / (E.grouped + e)
@@ -105,7 +105,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       y.rep.grouped <- apply(y.rep.samples, c(1, 3), sum, na.rm = TRUE)
       fit.big.y <- matrix(NA, length(y.grouped), n.samples)
       fit.big.y.rep <- matrix(NA, length(y.grouped), n.samples)
-      if (fit.stat == 'chi-square') {
+      if (fit.stat %in% c('chi-squared', 'chi-square')) {
         for (i in 1:n.samples) {
           E.grouped <- apply(det.prob[i, , , drop = FALSE] * z.samples[i, ], 3, sum, na.rm = TRUE)
           fit.big.y[, i] <- (y.grouped - E.grouped)^2 / (E.grouped + e)
@@ -136,6 +136,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     out$n.burn <- object$n.burn
     out$n.thin <- object$n.thin
     out$n.post <- object$n.post
+    out$n.chains <- object$n.chains
   } 
   # Multispecies models
   if (class(object) %in% c('msPGOcc', 'spMsPGOcc')) {
@@ -165,7 +166,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     z.samples <- object$z.samples
     alpha.samples <- object$alpha.samples
     # Get detection probability
-    n.samples <- object$n.post
+    n.samples <- object$n.post * object$n.chains
     det.prob <- array(NA, dim = c(nrow(X.p), N, n.samples))
     sp.indx <- rep(1:N, ncol(X.p))
     if (object$pRE) {
@@ -197,8 +198,8 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       fit.big.y.rep <- array(NA, dim = c(n.samples, N, J))
       fit.big.y <- array(NA, dim = c(n.samples, N, J))
       for (i in 1:N) {
-        print(paste("Currently on species ", i, " out of ", N, sep = ''))
-        if (fit.stat == 'chi-square') {
+        message(noquote(paste("Currently on species ", i, " out of ", N, sep = '')))
+        if (fit.stat %in% c('chi-squared', 'chi-square')) {
             for (j in 1:n.samples) {
               E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 3, sum, na.rm = TRUE)
               fit.big.y[j, i, ] <- (y.grouped[i, ] - E.grouped)^2 / (E.grouped + e)
@@ -222,8 +223,8 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       fit.big.y <- array(NA, dim = c(n.samples, N, max(n.rep)))
       fit.big.y.rep <- array(NA, dim = c(n.samples, N, max(n.rep)))
       for (i in 1:N) {
-        print(paste("Currently on species ", i, " out of ", N, sep = ''))
-        if (fit.stat == 'chi-square') {
+        message(noquote(paste("Currently on species ", i, " out of ", N, sep = '')))
+        if (fit.stat %in% c('chi-squared', 'chi-square')) {
           for (j in 1:n.samples) {
             E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 4, sum, na.rm = TRUE)
             fit.big.y[j, i, ] <- (y.grouped[i, ] - E.grouped)^2 / (E.grouped + e)
@@ -255,6 +256,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     out$n.burn <- object$n.burn
     out$n.thin <- object$n.thin
     out$n.post <- object$n.post
+    out$n.chains <- object$n.chains
     out$sp.names <- object$sp.names
   }
   # For integrated models
@@ -279,7 +281,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
       # Get detection probability
       det.prob <- logit.inv(X.p[[q]] %*% t(alpha.samples))
       det.prob <- array(det.prob, dim(y.rep.samples))
-      n.samples <- object$n.post
+      n.samples <- object$n.post * object$n.chains
       fit.y <- rep(NA, n.samples)
       fit.y.rep <- rep(NA, n.samples)
       e <- 0.0001
@@ -289,7 +291,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
         y.rep.grouped <- apply(y.rep.samples, c(1, 2), sum, na.rm = TRUE)
         fit.big.y.rep <- matrix(NA, length(y.grouped), n.samples)
         fit.big.y <- matrix(NA, length(y.grouped), n.samples)
-        if (fit.stat == 'chi-square') {
+        if (fit.stat %in% c('chi-squared', 'chi-square')) {
           for (i in 1:n.samples) {
             E.grouped <- apply(det.prob[i, , , drop = FALSE] * z.samples[i, ], 2, sum, na.rm = TRUE)
             fit.big.y[, i] <- (y.grouped - E.grouped)^2 / (E.grouped + e)
@@ -311,7 +313,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
         y.rep.grouped <- apply(y.rep.samples, c(1, 3), sum, na.rm = TRUE)
         fit.big.y <- matrix(NA, length(y.grouped), n.samples)
         fit.big.y.rep <- matrix(NA, length(y.grouped), n.samples)
-        if (fit.stat == 'chi-square') {
+        if (fit.stat %in% c('chi-squared', 'chi-square')) {
           for (i in 1:n.samples) {
             E.grouped <- apply(det.prob[i, , , drop = FALSE] * z.samples[i, ], 3, sum, na.rm = TRUE)
             fit.big.y[, i] <- (y.grouped - E.grouped)^2 / (E.grouped + e)
@@ -348,6 +350,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     out$n.burn <- object$n.burn
     out$n.thin <- object$n.thin
     out$n.post <- object$n.post
+    out$n.chains <- object$n.chains
   }
 
   class(out) <- 'ppcOcc'

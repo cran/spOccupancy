@@ -1,9 +1,9 @@
 \name{spIntPGOcc}
 \alias{spIntPGOcc}
-\title{Function for Fitting Single Species Integrated Spatial Occupancy Models Using Polya-Gamma Latent Variables}
+\title{Function for Fitting Single-Species Integrated Spatial Occupancy Models Using Polya-Gamma Latent Variables}
 
 \description{
-  The function \code{spIntPGOcc} fits single species integrated spatial occupancy models using Polya-Gamma latent variables. Models can be fit using either a full Gaussian process or a Nearest Neighbor Gaussian Process for large data sets. Data integration is done using a joint likelihood framework, assuming distinct detection models for each data source that are each conditional on a single latent occupancy process. 
+  The function \code{spIntPGOcc} fits single-species integrated spatial occupancy models using Polya-Gamma latent variables. Models can be fit using either a full Gaussian process or a Nearest Neighbor Gaussian Process for large data sets. Data integration is done using a joint likelihood framework, assuming distinct detection models for each data source that are each conditional on a single latent occupancy process. 
 }
 
 \usage{
@@ -13,7 +13,7 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
            batch.length, accept.rate = 0.43, n.omp.threads = 1, 
            verbose = TRUE, n.report = 100, 
            n.burn = round(.10 * n.batch * batch.length), 
-           n.thin = 1, k.fold, k.fold.threads = 1, 
+           n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
            k.fold.seed, k.fold.data, ...)
 }
 
@@ -117,7 +117,7 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
     might produce different, but equally valid, neighbor sets, 
     e.g., if data are on a grid. }
 
-  \item{n.batch}{the number of MCMC batches to run for the Adaptive MCMC 
+  \item{n.batch}{the number of MCMC batches to run for each chain for the Adaptive MCMC 
     sampler. See Roberts and Rosenthal (2009) for details.}
   
   \item{batch.length}{the length of each MCMC batch to run for the Adaptive 
@@ -147,6 +147,8 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
   \item{n.thin}{the thinning interval for collection of MCMC samples. The
     thinning occurs after the \code{n.burn} samples are discarded. Default 
     value is set to 1.}
+
+  \item{n.chains}{the number of chains to run in sequence.}
 
   \item{k.fold}{specifies the number of \emph{k} folds for cross-validation.
     If not specified as an argument, then cross-validation is not performed

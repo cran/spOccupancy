@@ -20,7 +20,8 @@ extern "C" {
 	     SEXP alphaStarting_r, SEXP zStarting_r, SEXP zLongIndx_r, 
 	     SEXP muBeta_r, SEXP muAlpha_r, SEXP SigmaBeta_r, SEXP SigmaAlpha_r, 
 	     SEXP nSamples_r, SEXP nThreads_r, SEXP verbose_r, SEXP nReport_r, 
-	     SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r){
+	     SEXP nBurn_r, SEXP nThin_r, SEXP nPost_r, SEXP currChain_r, 
+	     SEXP nChain_r){
    
     /**********************************************************************
      * Initial constants
@@ -43,12 +44,18 @@ extern "C" {
     double *y = REAL(y_r);
     double *X = REAL(X_r);
     double *Xp = REAL(Xp_r);
-    double *muBeta = REAL(muBeta_r); 
-    double *muAlpha = REAL(muAlpha_r); 
-    double *SigmaBetaInv = REAL(SigmaBeta_r); 
-    double *SigmaAlphaInv = REAL(SigmaAlpha_r); 
     int pOcc = INTEGER(pocc_r)[0];
     int pDet = INTEGER(pdet_r)[0];
+    int ppDet = pDet * pDet;
+    int ppOcc = pOcc * pOcc; 
+    double *muBeta = (double *) R_alloc(pOcc, sizeof(double));   
+    F77_NAME(dcopy)(&pOcc, REAL(muBeta_r), &inc, muBeta, &inc);
+    double *muAlpha = (double *) R_alloc(pDet, sizeof(double));   
+    F77_NAME(dcopy)(&pDet, REAL(muAlpha_r), &inc, muAlpha, &inc);
+    double *SigmaBetaInv = (double *) R_alloc(ppOcc, sizeof(double));   
+    F77_NAME(dcopy)(&ppOcc, REAL(SigmaBeta_r), &inc, SigmaBetaInv, &inc);
+    double *SigmaAlphaInv = (double *) R_alloc(ppDet, sizeof(double));   
+    F77_NAME(dcopy)(&ppDet, REAL(SigmaAlpha_r), &inc, SigmaAlphaInv, &inc);
     int J = INTEGER(J_r)[0];
     double *K = REAL(K_r); 
     int *zLongIndx = INTEGER(zLongIndx_r); 
@@ -60,8 +67,9 @@ extern "C" {
     int nThin = INTEGER(nThin_r)[0]; 
     int nBurn = INTEGER(nBurn_r)[0]; 
     int nPost = INTEGER(nPost_r)[0]; 
+    int currChain = INTEGER(currChain_r)[0];
+    int nChain = INTEGER(nChain_r)[0];
     int status = 0; 
-    double *z = REAL(zStarting_r); 
     int thinIndx = 0;
     int sPost = 0;  
 
@@ -78,19 +86,25 @@ extern "C" {
      * Print Information 
      * *******************************************************************/
     if(verbose){
-      Rprintf("----------------------------------------\n");
-      Rprintf("\tModel description\n");
-      Rprintf("----------------------------------------\n");
-      Rprintf("Occupancy model with Polya-Gamma latent\nvariable fit with %i sites.\n\n", J);
-      Rprintf("Number of MCMC samples: %i \n", nSamples);
-      Rprintf("Burn-in: %i \n", nBurn); 
-      Rprintf("Thinning Rate: %i \n", nThin); 
-      Rprintf("Total Posterior Samples: %i \n\n", nPost); 
+      if (currChain == 1) {
+        Rprintf("----------------------------------------\n");
+        Rprintf("\tModel description\n");
+        Rprintf("----------------------------------------\n");
+        Rprintf("Occupancy model with Polya-Gamma latent\nvariable fit with %i sites.\n\n", J);
+        Rprintf("Samples per Chain: %i \n", nSamples);
+        Rprintf("Burn-in: %i \n", nBurn); 
+        Rprintf("Thinning Rate: %i \n", nThin); 
+	Rprintf("Number of Chains: %i \n", nChain);
+        Rprintf("Total Posterior Samples: %i \n\n", nPost * nChain); 
 #ifdef _OPENMP
-      Rprintf("\nSource compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
+        Rprintf("\nSource compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
 #else
-      Rprintf("Source not compiled with OpenMP support.\n\n");
+        Rprintf("Source not compiled with OpenMP support.\n\n");
 #endif
+      }
+      Rprintf("----------------------------------------\n");
+      Rprintf("\tChain %i\n", currChain);
+      Rprintf("----------------------------------------\n");
       Rprintf("Sampling ... \n");
     }
 
@@ -103,11 +117,14 @@ extern "C" {
     // Detection covariates
     double *alpha = (double *) R_alloc(pDet, sizeof(double));   
     F77_NAME(dcopy)(&pDet, REAL(alphaStarting_r), &inc, alpha, &inc);
+    // Latent Occurrence
+    double *z = (double *) R_alloc(J, sizeof(double));   
+    F77_NAME(dcopy)(&J, REAL(zStarting_r), &inc, z, &inc);
     // Auxiliary variables
-    double *omegaDet = (double *) R_alloc(nObs, sizeof(double));
-    double *omegaOcc = (double *) R_alloc(J, sizeof(double));
-    double *kappaDet = (double *) R_alloc(nObs, sizeof(double)); 
-    double *kappaOcc = (double *) R_alloc(J, sizeof(double)); 
+    double *omegaDet = (double *) R_alloc(nObs, sizeof(double)); zeros(omegaDet, nObs);
+    double *omegaOcc = (double *) R_alloc(J, sizeof(double)); zeros(omegaOcc, J);
+    double *kappaDet = (double *) R_alloc(nObs, sizeof(double)); zeros(kappaDet, nObs);
+    double *kappaOcc = (double *) R_alloc(J, sizeof(double)); zeros(kappaOcc, J);
 
     /**********************************************************************
      * Return Stuff
@@ -124,8 +141,6 @@ extern "C" {
     /**********************************************************************
      * Other initial starting stuff
      * *******************************************************************/
-    int ppDet = pDet * pDet;
-    int ppOcc = pOcc * pOcc; 
     int JpOcc = J * pOcc; 
     int nObspDet = nObs * pDet;
     double *tmp_ppDet = (double *) R_alloc(ppDet, sizeof(double));
@@ -139,8 +154,11 @@ extern "C" {
       tmp_J[j] = 0; 
     }
     double *tmp_nObs = (double *) R_alloc(nObs, sizeof(double)); 
+    zeros(tmp_nObs, nObs);
     double *tmp_JpOcc = (double *) R_alloc(JpOcc, sizeof(double));
+    zeros(tmp_JpOcc, JpOcc);
     double *tmp_nObspDet = (double *) R_alloc(nObspDet, sizeof(double));
+    zeros(tmp_nObspDet, nObspDet);
    
     // For latent occupancy
     double psiNum; 
