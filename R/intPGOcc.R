@@ -12,7 +12,7 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     # Make it look nice
     if (verbose) {
       cat("----------------------------------------\n");
-      cat("\tPreparing the data\n");
+      cat("\tPreparing to run the model\n");
       cat("----------------------------------------\n");
     }
     # Check for unused arguments ------------------------------------------	
@@ -104,10 +104,35 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     data$occ.covs <- as.data.frame(data$occ.covs)
 
     # Checking missing values ---------------------------------------------
+    # y -------------------------------
     for (q in 1:n.data) {
       y.na.test <- apply(y[[q]], 1, function(a) sum(!is.na(a)))
       if (sum(y.na.test == 0) > 0) {
         stop(paste("error: some sites in data source ", q, " in y have all missing detection histories.\n Remove these sites from y and all objects in the 'data' argument if the site is not surveyed by another data source\n, then use 'predict' to obtain predictions at these locations if desired.", sep = ''))
+      }
+    }
+    # occ.covs ------------------------
+    if (sum(is.na(data$occ.covs)) != 0) {
+      stop("error: missing values in occ.covs. Please remove these sites from all objects in data or somehow replace the NA values with non-missing values (e.g., mean imputation).") 
+    }
+    # det.covs ------------------------
+    for (q in 1:n.data) {
+      for (i in 1:ncol(data$det.covs[[q]])) {
+        if (sum(is.na(data$det.covs[[q]][, i])) > sum(is.na(y[[q]]))) {
+          stop("error: some elements in det.covs have missing values where there is an observed data value in y. Please either replace the NA values in det.covs with non-missing values (e.g., mean imputation) or set the corresponding values in y to NA where the covariate is missing.") 
+        }
+      }
+      # Misalignment between y and det.covs
+      y.missing <- which(is.na(y[[q]]))
+      det.covs.missing <- lapply(data$det.covs[[q]], function(a) which(is.na(a)))
+      for (i in 1:length(det.covs.missing)) {
+        tmp.indx <- !(y.missing %in% det.covs.missing[[i]])
+        if (sum(tmp.indx) > 0) {
+          if (i == 1 & verbose) {
+            message("There are missing values in data$y with corresponding non-missing values in data$det.covs.\nRemoving these site/replicate combinations for fitting the model.")
+          }
+          data$det.covs[[q]][y.missing, i] <- NA
+        }
       }
     }
 
@@ -132,13 +157,18 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       stop("error: occ.formula must be specified")
     }
 
-    if (class(occ.formula) == 'formula') {
+    if (is(occ.formula, 'formula')) {
       tmp <- parseFormula(occ.formula, data$occ.covs)
       X <- as.matrix(tmp[[1]])
+      X.re <- as.matrix(tmp[[4]])
+      x.re.names <- colnames(X.re)
       x.names <- tmp[[2]]
     } else {
       stop("error: occ.formula is misspecified")
     }
+    # Get RE level names
+    re.level.names <- lapply(data$occ.covs[, x.re.names, drop = FALSE],
+			     function (a) sort(unique(a)))
 
     # Detection -----------------------
     if (missing(det.formula)) {
@@ -148,12 +178,19 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       stop(paste("error: det.formula must be a list of ", n.data, " formulas", sep = ''))
     }
     X.p <- list()
+    X.p.re <- list()
     x.p.names <- list()
+    # x.p.re.names <- list()
+    # p.re.level.names <- list()
     for (i in 1:n.data) {
-      if (class(det.formula[[i]]) == 'formula') {
+      if (is(det.formula[[i]], 'formula')) {
         tmp <- parseFormula(det.formula[[i]], data$det.covs[[i]])
         X.p[[i]] <- as.matrix(tmp[[1]])
+        # X.p.re[[i]] <- as.matrix(tmp[[4]])
+        # x.p.re.names[[i]] <- colnames(X.p.re)
         x.p.names[[i]] <- tmp[[2]]
+	# p.re.level.names[[i]] <- lapply(data$det.covs[[i]][, x.p.re.names[[i]], drop = FALSE],
+	# 		                function (a) sort(unique(a)))
       } else {
         stop(paste("error: det.formula for data source ", i, " is misspecified", sep = ''))
       }
@@ -400,6 +437,19 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     alpha.indx.r <- unlist(sapply(1:n.data, function(a) rep(a, p.det.long[a])))
     alpha.indx.c <- alpha.indx.r - 1
 
+    # Should initial values be fixed --
+    if ("fix" %in% names(inits)) {
+      fix.inits <- inits[["fix"]]
+      if ((fix.inits != TRUE) & (fix.inits != FALSE)) {
+        stop(paste("error: inits$fix must take value TRUE or FALSE"))
+      }
+    } else {
+      fix.inits <- FALSE
+    }
+    if (verbose & fix.inits & (n.chains > 1)) {
+      message("Fixing initial values across all chains\n")
+    }
+
     # Set model.deviance to NA for returning when no cross-validation
     model.deviance <- NA
 
@@ -443,7 +493,7 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     out.tmp <- list()
     for (i in 1:n.chains) {
       # Change initial values if i > 1
-      if (i > 1) {
+      if ((i > 1) & (!fix.inits)) {
         beta.inits <- rnorm(p.occ, mu.beta, sqrt(sigma.beta))
         alpha.inits <- rnorm(p.det, mu.alpha, sqrt(sigma.alpha))
       }
@@ -683,5 +733,8 @@ intPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     class(out) <- "intPGOcc"
 
     out$run.time <- proc.time() - ptm
+    # TODO: 
+    out$pRE <- FALSE
+    out$psiRE <- FALSE
     out
 }

@@ -15,9 +15,14 @@ ppcOcc <- function(object, fit.stat, group, ...) {
   if (missing(object)) {
     stop("error: object must be specified")
   }
-  if (!class(object) %in% c('PGOcc', 'spPGOcc', 'msPGOcc', 
-			    'spMsPGOcc', 'intPGOcc', 'spIntPGOcc')) {
-    stop("error: object must be one of the following classes: PGOcc, spPGOcc, msPGOcc, spMsPGOcc, intPGOcc, spIntPGOcc\n")
+  # if (is(object, c('lfJSDM', 'sfJSDM'))) {
+  if (class(object) %in% c('lfJSDM', 'sfJSDM')) {
+    stop("error: ppcOcc is not implemented for lfJSDM and sfJSDM")
+  }
+  if (!(class(object) %in% c('PGOcc', 'spPGOcc', 'msPGOcc', 
+                             'spMsPGOcc', 'intPGOcc', 'spIntPGOcc', 
+                             'lfMsPGOcc', 'sfMsPGOcc'))) {
+    stop("error: object must be one of the following classes: PGOcc, spPGOcc, msPGOcc, spMsPGOcc, intPGOcc, spIntPGOcc, lfMsPGOcc, sfMsPGOcc\n")
   }
   # Fit statistic ---------------------
   if (missing(fit.stat)) {
@@ -31,7 +36,8 @@ ppcOcc <- function(object, fit.stat, group, ...) {
   if (missing(group)) {
     stop("error: group must be specified")
   }
-  if (!(group %in% c(1, 2)) & class(object) %in% c('PGOcc', 'spPGOcc', 'intPGOcc', 'spIntPGOcc')) {
+  if (!(group %in% c(1, 2)) & (class(object) %in% c('PGOcc', 'spPGOcc', 
+						    'intPGOcc', 'spIntPGOcc'))) {
     stop("error: group must be 1 (row) or 2 (columns) for objects of class PGOcc, spPGOcc, intPGOcc, spIntPGOcc")
   }
   # Functions -------------------------------------------------------------
@@ -40,39 +46,18 @@ ppcOcc <- function(object, fit.stat, group, ...) {
 
   out <- list()
   # For single species models
+  #if (is(object, c('PGOcc', 'spPGOcc'))) {
   if (class(object) %in% c('PGOcc', 'spPGOcc')) {
     y <- object$y
-    X.p <- object$X.p
-    if (nrow(X.p) == nrow(y)) {
-      X.p <- do.call(rbind, replicate(ncol(y), X.p, simplify = FALSE))
-      X.p <- X.p[!is.na(c(y)), , drop = FALSE]
-      if (object$pRE) {
-        lambda.p <- do.call(rbind, replicate(ncol(y), object$lambda.p, simplify = FALSE))
-        lambda.p <- lambda.p[!is.na(c(y)), , drop = FALSE]
-      }
-    } else {
-      if (object$pRE) {
-        lambda.p <- object$lambda.p
-      }
-    }
-    p.det <- dim(X.p)[2]
-    n.rep <- apply(y, 1, function(a) sum(!is.na(a)))
     J <- nrow(y)
-    if (class(object) == 'PGOcc') {
-      y.rep.samples <- fitted.PGOcc(object)
+    if (is(object, 'PGOcc')) {
+      fitted.out <- fitted.PGOcc(object)
     } else {
-      y.rep.samples <- fitted.spPGOcc(object)
+      fitted.out <- fitted.spPGOcc(object)
     }
     z.samples <- object$z.samples
-    alpha.samples <- object$alpha.samples
-    # Get detection probability
-    if (object$pRE) {
-      det.prob <- logit.inv(X.p %*% t(alpha.samples) + 
-		            lambda.p %*% t(object$alpha.star.samples))
-    } else {
-      det.prob <- logit.inv(X.p %*% t(alpha.samples))
-    }
-    det.prob <- array(det.prob, dim(y.rep.samples))
+    y.rep.samples <- fitted.out$y.rep.samples
+    det.prob <- fitted.out$p.samples
     n.samples <- object$n.post * object$n.chains
     fit.y <- rep(NA, n.samples)
     fit.y.rep <- rep(NA, n.samples)
@@ -139,55 +124,17 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     out$n.chains <- object$n.chains
   } 
   # Multispecies models
-  if (class(object) %in% c('msPGOcc', 'spMsPGOcc')) {
+  # if (is(object, c('msPGOcc', 'spMsPGOcc', 'lfMsPGOcc', 'sfMsPGOcc'))) {
+  if (class(object) %in% c('msPGOcc', 'spMsPGOcc', 'lfMsPGOcc', 'sfMsPGOcc')) {
     y <- object$y
-    X.p <- object$X.p
-    if (nrow(X.p) == nrow(y)) {
-      X.p <- do.call(rbind, replicate(ncol(y), X.p, simplify = FALSE))
-      X.p <- X.p[!is.na(c(y)), , drop = FALSE]
-      if (object$pRE) {
-        lambda.p <- do.call(rbind, replicate(ncol(y), object$lambda.p, simplify = FALSE))
-        lambda.p <- lambda.p[!is.na(c(y)), , drop = FALSE]
-      }
-    } else {
-      if (object$pRE) {
-        lambda.p <- object$lambda.p
-      }
-    }
-    p.det <- dim(X.p)[2]
-    n.rep <- apply(y[1, , , drop = FALSE], 2, function(a) sum(!is.na(a)))
     J <- dim(y)[2]
     N <- dim(y)[1]
-    if (class(object) == 'msPGOcc') {
-      y.rep.samples <- fitted.msPGOcc(object)
-    } else {
-      y.rep.samples <- fitted.spMsPGOcc(object)
-    }
+    # Fitted function is the same for all multispecies object types. 
+    fitted.out <- fitted.msPGOcc(object)
+    y.rep.samples <- fitted.out$y.rep.samples
+    det.prob <- fitted.out$p.samples
     z.samples <- object$z.samples
-    alpha.samples <- object$alpha.samples
-    # Get detection probability
     n.samples <- object$n.post * object$n.chains
-    det.prob <- array(NA, dim = c(nrow(X.p), N, n.samples))
-    sp.indx <- rep(1:N, ncol(X.p))
-    if (object$pRE) {
-      sp.re.indx <- rep(1:N, each = ncol(object$alpha.star.samples) / N)
-      for (i in 1:N) {
-        det.prob[, i, ] <- logit.inv(X.p %*% t(alpha.samples[, sp.indx == i]) + 
-  					   lambda.p %*% t(object$alpha.star.samples[, sp.re.indx == i]))
-      }
-    } else {
-      for (i in 1:N) {
-        det.prob[, i, ] <- logit.inv(X.p %*% t(alpha.samples[, sp.indx == i]))
-      }
-    }
-    det.prob <- aperm(det.prob, c(3, 2, 1))
-    det.prob.full <- array(NA, dim(y.rep.samples))
-    # Null model support
-    if (sum(dim(y.rep.samples)[1:3] == dim(det.prob)) == 3) {
-      det.prob.full[, , , ] <- det.prob
-    } else {
-      det.prob.full[!is.na(y.rep.samples)] <- det.prob
-    }
     fit.y <- matrix(NA, n.samples, N)
     fit.y.rep <- matrix(NA, n.samples, N)
     e <- 0.0001
@@ -201,7 +148,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
         message(noquote(paste("Currently on species ", i, " out of ", N, sep = '')))
         if (fit.stat %in% c('chi-squared', 'chi-square')) {
             for (j in 1:n.samples) {
-              E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 3, sum, na.rm = TRUE)
+              E.grouped <- apply(det.prob[j, i, , , drop = FALSE] * z.samples[j, i, ], 3, sum, na.rm = TRUE)
               fit.big.y[j, i, ] <- (y.grouped[i, ] - E.grouped)^2 / (E.grouped + e)
               fit.y[j, i] <- sum(fit.big.y[j, i, ])
               fit.big.y.rep[j, i, ] <- (y.rep.grouped[j, i, ] - E.grouped)^2 / (E.grouped + e)
@@ -209,7 +156,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
             }
         } else if (fit.stat == 'freeman-tukey') {
           for (j in 1:n.samples) {
-            E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 3, sum, na.rm = TRUE)
+            E.grouped <- apply(det.prob[j, i, , , drop = FALSE] * z.samples[j, i, ], 3, sum, na.rm = TRUE)
             fit.big.y[j, i, ] <- (sqrt(y.grouped[i, ]) - sqrt(E.grouped))^2 
             fit.y[j, i] <- sum(fit.big.y[j, i, ])
             fit.big.y.rep[j, i, ] <- (sqrt(y.rep.grouped[j, i, ]) - sqrt(E.grouped))^2 
@@ -220,13 +167,13 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     } else if (group == 2) {
       y.grouped <- apply(y, c(1, 3), sum, na.rm = TRUE)
       y.rep.grouped <- apply(y.rep.samples, c(1, 2, 4), sum, na.rm = TRUE)
-      fit.big.y <- array(NA, dim = c(n.samples, N, max(n.rep)))
-      fit.big.y.rep <- array(NA, dim = c(n.samples, N, max(n.rep)))
+      fit.big.y <- array(NA, dim = c(n.samples, N, dim(y)[3]))
+      fit.big.y.rep <- array(NA, dim = c(n.samples, N, dim(y)[3]))
       for (i in 1:N) {
         message(noquote(paste("Currently on species ", i, " out of ", N, sep = '')))
         if (fit.stat %in% c('chi-squared', 'chi-square')) {
           for (j in 1:n.samples) {
-            E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 4, sum, na.rm = TRUE)
+            E.grouped <- apply(det.prob[j, i, , , drop = FALSE] * z.samples[j, i, ], 4, sum, na.rm = TRUE)
             fit.big.y[j, i, ] <- (y.grouped[i, ] - E.grouped)^2 / (E.grouped + e)
             fit.y[j, i] <- sum(fit.big.y[j, i, ])
             fit.big.y.rep[j, i, ] <- (y.rep.grouped[j, i, ] - E.grouped)^2 / (E.grouped + e)
@@ -234,7 +181,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
           }
         } else if (fit.stat == 'freeman-tukey') {
           for (j in 1:n.samples) {
-            E.grouped <- apply(det.prob.full[j, i, , , drop = FALSE] * z.samples[j, i, ], 4, sum, na.rm = TRUE)
+            E.grouped <- apply(det.prob[j, i, , , drop = FALSE] * z.samples[j, i, ], 4, sum, na.rm = TRUE)
             fit.big.y[j, i, ] <- (sqrt(y.grouped[i, ]) - sqrt(E.grouped))^2 
             fit.y[j, i] <- sum(fit.big.y[j, i, ])
             fit.big.y.rep[j, i, ] <- (sqrt(y.rep.grouped[j, i, ]) - sqrt(E.grouped))^2 
@@ -260,6 +207,7 @@ ppcOcc <- function(object, fit.stat, group, ...) {
     out$sp.names <- object$sp.names
   }
   # For integrated models
+  # if (is(object, c('intPGOcc', 'spIntPGOcc'))) {
   if (class(object) %in% c('intPGOcc', 'spIntPGOcc')) {
     y <- object$y
     n.data <- length(y)

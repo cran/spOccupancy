@@ -4,24 +4,23 @@
 
 \description{
   The function \code{predict} collects posterior predictive samples for a set of new 
-  locations given an object of class `spPGOcc`. 
+  locations given an object of class `spPGOcc`. Prediction is possible for both the 
+  latent occupancy state as well as detection.
 }
 
 \usage{
 \method{predict}{spPGOcc}(object, X.0, coords.0, n.omp.threads = 1, verbose = TRUE, 
-                          n.report = 100, ...)
+        n.report = 100, ignore.RE = FALSE, type = 'occupancy', ...)
 }
 
 \arguments{
 
   \item{object}{an object of class \code{spPGOcc}}
 
-  \item{X.0}{the design matrix for prediction locations. This should 
-    include a column of 1s for the intercept if an intercept is included in the original model fit.
-    Covariates should have the same column names as those used when fitting the model with 
-    \code{spPGOcc}.}
+  \item{X.0}{the design matrix of covariates at the prediction locations. This should include a column of 1s for the intercept if an intercept is included in the model. If random effects are included in the occupancy (or detection if \code{type = 'detection'}) portion of the model, the levels of the random effects at the new locations should be included as a column in the design matrix. The ordering of the levels should match the ordering used to fit the data in \code{spPGOcc}. Columns should correspond to the order of how covariates were specified in the corresponding formula argument of \code{spPGOcc}. Column names of the random effects must match the name of the random effects, if specified in the corresponding formula argument of \code{spPGOcc}.}
 
-  \item{coords.0}{the spatial coordinates corresponding to \code{X.0}.}
+  \item{coords.0}{the spatial coordinates corresponding to \code{X.0}. Note that \code{spOccupancy} assumes coordinates are specified 
+  in a projected coordinate system.}
 
    \item{n.omp.threads}{a positive integer indicating
     the number of threads to use for SMP parallel processing. The package must
@@ -33,9 +32,21 @@
     sampler is printed to the screen. Otherwise, nothing is printed to
     the screen.}
 
+  \item{ignore.RE}{a logical value indicating whether to include unstructured random 
+    effects for prediction. If TRUE, unstructured random effects will be ignored and 
+    prediction will only use the fixed effects and the spatial random effects. If FALSE, 
+    random effects will be included in the prediction for both observed and unobserved 
+    levels of the unstructured random effects.}
+
   \item{n.report}{the interval to report sampling progress.}
 
+  \item{type}{a quoted keyword indicating what type of prediction to produce. Valid keywords are 'occupancy' to predict latent occupancy probability and latent occupancy values (this is the default), or 'detection' to predict detection probability given new values of detection covariates.}
+
   \item{...}{currently no additional arguments}
+}
+
+\note{
+  When \code{ignore.RE = FALSE}, both sampled levels and non-sampled levels of random effects are supported for prediction. For sampled levels, the posterior distribution for the random intercept corresponding to that level of the random effect will be used in the prediction. For non-sampled levels, random values are drawn from a normal distribution using the posterior samples of the random effect variance, which results in fully propagated uncertainty in predictions with models that incorporate random effects.
 }
 
 \author{
@@ -48,7 +59,7 @@
 }
 
 \value{
-  An object of class \code{predict.spPGOcc} that is a list comprised of: 
+  A list object of class \code{predict.spPGOcc}. When \code{type = 'occupancy'}, the list consists of:  
 
   \item{psi.0.samples}{a \code{coda} object of posterior predictive samples 
     for the latent occurrence probability values.}
@@ -58,6 +69,13 @@
   
   \item{w.0.samples}{a \code{coda} object of posterior predictive samples 
     for the latent spatial random effects.}
+
+  \item{run.time}{execution time reported using \code{proc.time()}.}
+
+  When \code{type = 'detection'}, the list consists of: 
+
+  \item{p.0.samples}{a \code{coda} object of posterior predictive samples for the 
+    detection probability values.}
 
   \item{run.time}{execution time reported using \code{proc.time()}.}
 
@@ -99,47 +117,47 @@ occ.covs <- X[, -1, drop = FALSE]
 colnames(occ.covs) <- c('occ.cov')
 det.covs <- list(det.cov.1 = X.p[, , 2])
 data.list <- list(y = y, 
-		  occ.covs = occ.covs, 
-		  det.covs = det.covs, 
-		  coords = coords)
+                  occ.covs = occ.covs, 
+                  det.covs = det.covs, 
+                  coords = coords)
 
 # Number of batches
-n.batch <- 50
+n.batch <- 10
 # Batch length
 batch.length <- 25
 n.iter <- n.batch * batch.length
 # Priors 
 prior.list <- list(beta.normal = list(mean = 0, var = 2.72), 
-		   alpha.normal = list(mean = 0, var = 2.72),
-		   sigma.sq.ig = c(2, 2), 
-		   phi.unif = c(3/1, 3/.1)) 
+                   alpha.normal = list(mean = 0, var = 2.72),
+                   sigma.sq.ig = c(2, 2), 
+                   phi.unif = c(3/1, 3/.1)) 
 # Initial values
 inits.list <- list(alpha = 0, beta = 0,
-		      phi = 3 / .5, 
-		      sigma.sq = 2,
-		      w = rep(0, nrow(X)),
-		      z = apply(y, 1, max, na.rm = TRUE))
+                   phi = 3 / .5, 
+                   sigma.sq = 2,
+                   w = rep(0, nrow(X)),
+                   z = apply(y, 1, max, na.rm = TRUE))
 # Tuning
 tuning.list <- list(phi = 1) 
 
 out <- spPGOcc(occ.formula = ~ occ.cov, 
-	       det.formula = ~ det.cov.1, 
-	       data = data.list, 
-	       inits = inits.list, 
-	       n.batch = n.batch, 
-	       batch.length = batch.length, 
-	       accept.rate = 0.43, 
-	       priors = prior.list,
-	       cov.model = 'exponential', 
-	       tuning = tuning.list, 
-	       n.omp.threads = 1, 
-	       verbose = TRUE, 
-	       NNGP = TRUE, 
-	       n.neighbors = 15, 
-	       search.type = 'cb', 
-	       n.report = 10, 
-	       n.burn = 500, 
-	       n.thin = 1)
+               det.formula = ~ det.cov.1, 
+               data = data.list, 
+               inits = inits.list, 
+               n.batch = n.batch, 
+               batch.length = batch.length, 
+               accept.rate = 0.43, 
+               priors = prior.list,
+               cov.model = 'exponential', 
+               tuning = tuning.list, 
+               n.omp.threads = 1, 
+               verbose = TRUE, 
+               NNGP = FALSE, 
+               n.neighbors = 15, 
+               search.type = 'cb', 
+               n.report = 10, 
+               n.burn = 50, 
+               n.thin = 1)
 
 summary(out) 
 

@@ -19,7 +19,7 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   # Make it look nice
   if (verbose) {
     cat("----------------------------------------\n");
-    cat("\tPreparing the data\n");
+    cat("\tPreparing to run the model\n");
     cat("----------------------------------------\n");
   }
   # Check for unused arguments ------------------------------------------	
@@ -111,14 +111,6 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     }
   }
 
-    # Checking missing values ---------------------------------------------
-    for (q in 1:n.data) {
-      y.na.test <- apply(y[[q]], 1, function(a) sum(!is.na(a)))
-      if (sum(y.na.test == 0) > 0) {
-        stop(paste("error: some sites in data source ", q, " in y have all missing detection histories.\n Remove these sites from y and all objects in the 'data' argument if the site is not surveyed by another data source\n, then use 'predict' to obtain predictions at these locations if desired.", sep = ''))
-      }
-    }
-
   # Neighbors and Ordering ----------------------------------------------
   if (NNGP) {
     u.search.type <- 2 
@@ -150,10 +142,43 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   }
   data$occ.covs <- as.data.frame(data$occ.covs)
 
+  # Checking missing values ---------------------------------------------
+  # y -------------------------------
+  for (q in 1:n.data) {
+    y.na.test <- apply(y[[q]], 1, function(a) sum(!is.na(a)))
+    if (sum(y.na.test == 0) > 0) {
+      stop(paste("error: some sites in data source ", q, " in y have all missing detection histories.\n Remove these sites from y and all objects in the 'data' argument if the site is not surveyed by another data source\n, then use 'predict' to obtain predictions at these locations if desired.", sep = ''))
+    }
+  }
+  # occ.covs ------------------------
+  if (sum(is.na(data$occ.covs)) != 0) {
+    stop("error: missing values in occ.covs. Please remove these sites from all objects in data or somehow replace the NA values with non-missing values (e.g., mean imputation).") 
+  }
+  # det.covs ------------------------
+  for (q in 1:n.data) {
+    for (i in 1:ncol(data$det.covs[[q]])) {
+      if (sum(is.na(data$det.covs[[q]][, i])) > sum(is.na(y[[q]]))) {
+        stop("error: some elements in det.covs have missing values where there is an observed data value in y. Please either replace the NA values in det.covs with non-missing values (e.g., mean imputation) or set the corresponding values in y to NA where the covariate is missing.") 
+      }
+    }
+    # Misalignment between y and det.covs
+    y.missing <- which(is.na(y[[q]]))
+    det.covs.missing <- lapply(data$det.covs[[q]], function(a) which(is.na(a)))
+    for (i in 1:length(det.covs.missing)) {
+      tmp.indx <- !(y.missing %in% det.covs.missing[[i]])
+      if (sum(tmp.indx) > 0) {
+        if (i == 1 & verbose) {
+          message("There are missing values in data$y with corresponding non-missing values in data$det.covs.\nRemoving these site/replicate combinations for fitting the model.")
+        }
+        data$det.covs[[q]][y.missing, i] <- NA
+      }
+    }
+  }
+
   # Formula -------------------------------------------------------------
   # Occupancy -----------------------
 
-  if (class(occ.formula) == 'formula') {
+  if (is(occ.formula, 'formula')) {
     tmp <- parseFormula(occ.formula, data$occ.covs)
     X <- as.matrix(tmp[[1]])
     x.names <- tmp[[2]]
@@ -168,7 +193,7 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   X.p <- list()
   x.p.names <- list()
   for (i in 1:n.data) {
-    if (class(det.formula[[i]]) == 'formula') {
+    if (is(det.formula[[i]], 'formula')) {
       tmp <- parseFormula(det.formula[[i]], data$det.covs[[i]])
       X.p[[i]] <- as.matrix(tmp[[1]])
       x.p.names[[i]] <- tmp[[2]]
@@ -380,10 +405,10 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       sigma.sq.b <- priors$sigma.sq.ig[2]
     } else {
       if (verbose) {
-        message("No prior specified for sigma.sq.ig.\nSetting the shape and scale parameters to 2.\n")
+        message("No prior specified for sigma.sq.ig.\nSetting the shape parameter to 2 and scale parameter to 1.\n")
       }
       sigma.sq.a <- 2
-      sigma.sq.b <- 2
+      sigma.sq.b <- 1
     }
     # nu -----------------------------
     if (cov.model == 'matern') {
@@ -488,7 +513,7 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         stop("error: initial values for phi must be of length 1")
       }
     } else {
-      phi.inits <- runif(1, lower.unif, upper.unif)
+      phi.inits <- runif(1, phi.a, phi.b)
       if (verbose) {
         message("phi is not specified in initial values.\nSetting initial value to random value from the prior distribution\n")
       }
@@ -538,6 +563,19 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       } else {
         nu.inits <- 0
       }
+    }
+
+    # Should initial values be fixed --
+    if ("fix" %in% names(inits)) {
+      fix.inits <- inits[["fix"]]
+      if ((fix.inits != TRUE) & (fix.inits != FALSE)) {
+        stop(paste("error: inits$fix must take value TRUE or FALSE"))
+      }
+    } else {
+      fix.inits <- FALSE
+    }
+    if (verbose & fix.inits & (n.chains > 1)) {
+      message("Fixing initial values across all chains\n")
     }
 
     # Covariance Model ----------------------------------------------------
@@ -641,7 +679,7 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     out.tmp <- list()
     for (i in 1:n.chains) {
       # Change initial values if i > 1
-      if (i > 1) {
+      if ((i > 1) & (!fix.inits)) {
         beta.inits <- rnorm(p.occ, mu.beta, sqrt(sigma.beta))
         alpha.inits <- rnorm(p.det, mu.alpha, sqrt(sigma.alpha))
         sigma.sq.inits <- rigamma(1, sigma.sq.a, sigma.sq.b)
@@ -922,6 +960,8 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         out.fit$n.thin <- n.thin
         out.fit$n.burn <- n.burn
 	out.fit$n.chains <- 1
+	out.fit$pRE <- FALSE
+	out.fit$psiRE <- FALSE
 	class(out.fit) <- "spPGOcc"
 
         out.pred <- predict.spPGOcc(out.fit, X.0, coords.0, verbose = FALSE)
@@ -939,10 +979,6 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       out$k.fold.deviance <- model.deviance
       stopImplicitCluster()
     }
-
-    class(out) <- "spIntPGOcc"
-    
-    out
   } else {
 
     # Nearest Neighbor Search ---------------------------------------------
@@ -1046,7 +1082,7 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     out.tmp <- list()
     for (i in 1:n.chains) {
       # Change initial values if i > 1
-      if (i > 1) {
+      if ((i > 1) & (!fix.inits)) {
         beta.inits <- rnorm(p.occ, mu.beta, sqrt(sigma.beta))
         alpha.inits <- rnorm(p.det, mu.alpha, sqrt(sigma.alpha))
         sigma.sq.inits <- rigamma(1, sigma.sq.a, sigma.sq.b)
@@ -1363,6 +1399,8 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         out.fit$n.thin <- n.thin
         out.fit$n.burn <- n.burn
 	out.fit$n.chains <- 1
+	out.fit$pRE <- FALSE
+	out.fit$psiRE <- FALSE
 	class(out.fit) <- "spPGOcc"
 
         out.pred <- predict.spPGOcc(out.fit, X.0, coords.0, verbose = FALSE)
@@ -1380,8 +1418,12 @@ spIntPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       out$k.fold.deviance <- model.deviance
       stopImplicitCluster()
     }
-    class(out) <- "spIntPGOcc"
-    out$run.time <- proc.time() - ptm
-    out
   }
+  class(out) <- "spIntPGOcc"
+  out$run.time <- proc.time() - ptm
+  # TODO: placeholder until you add in random effects for the integrated 
+  #       models. 
+  out$pRE <- FALSE
+  out$psiRE <- FALSE
+  out
 }

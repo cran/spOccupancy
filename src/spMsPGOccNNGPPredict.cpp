@@ -17,7 +17,8 @@ extern "C" {
   SEXP spMsPGOccNNGPPredict(SEXP coords_r, SEXP J_r, SEXP N_r, 
 		            SEXP pOcc_r, SEXP m_r, SEXP X0_r, SEXP coords0_r, 
 			    SEXP q_r, SEXP nnIndx0_r, SEXP betaSamples_r, 
-			    SEXP thetaSamples_r, SEXP wSamples_r, SEXP nSamples_r, 
+			    SEXP thetaSamples_r, SEXP wSamples_r, 
+			    SEXP betaStarSiteSamples_r, SEXP nSamples_r, 
 			    SEXP covModel_r, SEXP nThreads_r, SEXP verbose_r, 
 			    SEXP nReport_r){
 
@@ -45,6 +46,7 @@ extern "C" {
     double *beta = REAL(betaSamples_r);
     double *theta = REAL(thetaSamples_r);
     double *w = REAL(wSamples_r);
+    double *betaStarSite = REAL(betaStarSiteSamples_r);
     
     int nSamples = INTEGER(nSamples_r)[0];
     int covModel = INTEGER(covModel_r)[0];
@@ -141,7 +143,7 @@ extern "C" {
       #endif
     }
 
-    int vIndx = 0;
+    int vIndx = -1;
     double *wV = (double *) R_alloc(qN*nSamples, sizeof(double));
 
     GetRNGstate();
@@ -153,7 +155,7 @@ extern "C" {
     for(j = 0; j < q; j++){
       for (i = 0; i < N; i++) {
 #ifdef _OPENMP
-#pragma omp parallel for private(threadID, phi, nu, sigmaSq, k, l, d, info) reduction(+:vIndx)
+#pragma omp parallel for private(threadID, phi, nu, sigmaSq, k, l, d, info)
 #endif     
         for(s = 0; s < nSamples; s++){
 #ifdef _OPENMP
@@ -186,14 +188,18 @@ extern "C" {
 	    d += tmp_m[threadID*m+k]*w[s*JN+nnIndx0[j+q*k] * N + i];
 	  }
 
+	  #ifdef _OPENMP
+          #pragma omp atomic
+          #endif   
+	  vIndx++;
+	  
 	  w0[s * qN + j * N + i] = sqrt(sigmaSq - F77_NAME(ddot)(&m, &tmp_m[threadID*m], &inc, &c[threadID*m], &inc))*wV[vIndx] + d;
 
-	  psi0[s * qN + j * N + i] = logitInv(F77_NAME(ddot)(&pOcc, &X0[j], &q, &beta[s*pOccN + i], &N) + w0[s * qN + j * N + i], zero, one);
-	  z0[s * qN + j * N + i] = rbinom(one, psi0[s * qN + j * N + i]);
+	  psi0[s * qN + j * N + i] = logitInv(F77_NAME(ddot)(&pOcc, &X0[j], &q, &beta[s*pOccN + i], &N) + w0[s * qN + j * N + i] + betaStarSite[s * qN + j * N + i], zero, one);
 	  
-	  vIndx++;
         } // sample
       } // species
+
       
       if(verbose){
 	if(status == nReport){
@@ -208,15 +214,28 @@ extern "C" {
       R_CheckUserInterrupt();
     } // location
 
-    PutRNGstate();
-    
     if(verbose){
       Rprintf("Location: %i of %i, %3.2f%%\n", j, q, 100.0*j/q);
       #ifdef Win32
       R_FlushConsole();
       #endif
     }
+      
+    // Generate latent occurrence state after the fact.
+    // Temporary fix. Will embed this in the above loop at some point.
+    if (verbose) {
+      Rprintf("Generating latent occupancy state\n");
+    }
+    for(j = 0; j < q; j++){
+      for (i = 0; i < N; i++) {
+        for(s = 0; s < nSamples; s++){
+	  z0[s * qN + j * N + i] = rbinom(one, psi0[s * qN + j * N + i]);
+	} // s
+      } // i
+    } // j
 
+    PutRNGstate();
+    
     //make return object
     SEXP result_r, resultName_r;
     int nResultListObjs = 3;
