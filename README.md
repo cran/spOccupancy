@@ -127,25 +127,25 @@ summary(out)
 #> Thinning Rate: 4
 #> Number of Chains: 3
 #> Total Posterior Samples: 6000
-#> Run Time (min): 1.4212
+#> Run Time (min): 1.4477
 #> 
 #> Occurrence (logit scale): 
 #>                          Mean     SD    2.5%     50%   97.5%   Rhat  ESS
-#> (Intercept)            3.9332 0.5585  2.9850  3.8780  5.2357 1.0589  257
-#> scale(Elevation)      -0.5069 0.2110 -0.9323 -0.5057 -0.1032 1.0189 1119
-#> I(scale(Elevation)^2) -1.1406 0.2057 -1.6026 -1.1218 -0.7826 1.0402  386
+#> (Intercept)            3.9871 0.5702  3.0346  3.9280  5.2375 1.0550  294
+#> scale(Elevation)      -0.5244 0.2233 -1.0009 -0.5155 -0.1102 1.0151 1436
+#> I(scale(Elevation)^2) -1.1613 0.2114 -1.6292 -1.1487 -0.7914 1.0593  399
 #> 
 #> Detection (logit scale): 
 #>                    Mean     SD    2.5%     50%  97.5%   Rhat  ESS
-#> (Intercept)      0.6624 0.1146  0.4389  0.6606 0.8859 1.0006 5572
-#> scale(day)       0.2922 0.0706  0.1564  0.2915 0.4327 0.9999 6000
-#> scale(tod)      -0.0326 0.0704 -0.1689 -0.0327 0.1038 1.0034 6000
-#> I(scale(day)^2) -0.0746 0.0863 -0.2430 -0.0769 0.0968 1.0007 6000
+#> (Intercept)      0.6629 0.1139  0.4432  0.6620 0.8905 1.0006 5243
+#> scale(day)       0.2902 0.0701  0.1535  0.2899 0.4333 1.0019 6000
+#> scale(tod)      -0.0297 0.0693 -0.1649 -0.0300 0.1074 1.0021 6000
+#> I(scale(day)^2) -0.0753 0.0852 -0.2445 -0.0761 0.0907 1.0004 5497
 #> 
 #> Spatial Covariance: 
 #>            Mean     SD   2.5%    50%  97.5%   Rhat ESS
-#> sigma.sq 0.9695 0.8124 0.2045 0.7195 3.2131 1.1136 114
-#> phi      0.0067 0.0073 0.0006 0.0036 0.0263 1.4115  59
+#> sigma.sq 1.1054 0.8433 0.2176 0.8835 3.2688 1.0867 116
+#> phi      0.0072 0.0074 0.0007 0.0038 0.0272 1.1358  56
 ```
 
 ### Posterior predictive check
@@ -171,7 +171,7 @@ summary(ppc.out)
 #> Number of Chains: 3
 #> Total Posterior Samples: 6000
 #> 
-#> Bayesian p-value:  0.4913 
+#> Bayesian p-value:  0.4797 
 #> Fit statistic:  freeman-tukey
 ```
 
@@ -184,7 +184,7 @@ due to Monte Carlo error your results will differ slightly).
 ``` r
 waicOcc(out)
 #>       elpd         pD       WAIC 
-#> -683.42274   19.50487 1405.85522
+#> -681.65894   21.05316 1405.42422
 ```
 
 Alternatively, we can perform k-fold cross-validation (CV) directly in
@@ -197,7 +197,7 @@ value of this CV score.
 
 ``` r
 out$k.fold.deviance
-#> [1] 1496.671
+#> [1] 1497.037
 ```
 
 ### Prediction
@@ -222,18 +222,21 @@ The `vignette("modelFitting")` provides a more detailed description and
 tutorial of the core functions in `spOccupancy`. For full statistical
 details on the MCMC samplers for core functions in `spOccupancy`, see
 `vignette("mcmcSamplers")`. In addition, see [our recent
-paper](https://arxiv.org/abs/2111.12163) that describes the package in
-more detail (Doser et al. 2021). For a detailed description and tutorial
-of joint species distribution models in `spOccupancy` that account for
-residual species correlations, see `vignette("factorModels")`, as well
-as `vignette("mcmcFactorModels")` for full statistical details.
+paper](https://doi.org/10.1111/2041-210X.13897) that describes the
+package in more detail (Doser et al. 2022a). For a detailed description
+and tutorial of joint species distribution models in `spOccupancy` that
+account for residual species correlations, see
+`vignette("factorModels")`, as well as `vignette("mcmcFactorModels")`
+for full statistical details.
 
 ## References
 
-Doser, J. W., Finley, A. O., Kéry, M., and Zipkin, E. F. (2021).
+Doser, J. W., Finley, A. O., Kéry, M., and Zipkin, E. F. (2022a).
 spOccupancy: An R package for single-species, multi-species, and
-integrated spatial occupancy models. [arXiv preprint arxiv:2111.12163](https://arxiv.org/abs/2111.12163).
+integrated spatial occupancy models. Methods in Ecology and Evolution.
+<https://doi.org/10.1111/2041-210X.13897>.
 
-Doser, J. W., Finley, A. O., and Banerjee, S. (2022) Joint species
+Doser, J. W., Finley, A. O., and Banerjee, S. (2022b) Joint species
 distribution models with imperfect detection for high-dimensional
-spatial data. [arXiv preprint arXiv:2204.02707](https://arxiv.org/abs/2204.02707).
+spatial data. [arXiv preprint
+arXiv:2204.02707](https://arxiv.org/abs/2204.02707).
