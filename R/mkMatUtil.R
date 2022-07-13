@@ -42,5 +42,4 @@ parseFormula <-  function(formula, data, intercept=TRUE, justX=FALSE){
       colnames(X.re) <- names(re.terms$flist)
     }
     return(list(X, xvars, xobs, X.re))
-  }
-
+}

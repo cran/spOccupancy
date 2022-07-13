@@ -265,13 +265,7 @@ PGOcc <- function(occ.formula, det.formula, data, inits, priors,
         X.p.re[, j] <- X.p.re[, j] + max(X.p.re[, j - 1]) + 1
       }
     }
-    lambda.psi <- matrix(0, J, n.occ.re)
     lambda.p <- matrix(0, n.obs, n.det.re)
-    if (p.occ.re > 0) {
-      for (i in 1:n.occ.re) {
-        lambda.psi[which(X.re == (i - 1), arr.ind = TRUE)[, 1], i] <- 1
-      }
-    }
     if (p.det.re > 0) {
       for (i in 1:n.det.re) {
         lambda.p[which(X.p.re == (i - 1), arr.ind = TRUE)[, 1], i] <- 1
@@ -747,7 +741,6 @@ PGOcc <- function(occ.formula, det.formula, data, inits, priors,
     out$X.re <- X.re
     out$X.p.re <- X.p.re
     out$lambda.p <- lambda.p
-    out$lambda.psi <- lambda.psi
     out$y <- y.big
     out$n.samples <- n.samples
     out$call <- cl
@@ -819,8 +812,6 @@ PGOcc <- function(occ.formula, det.formula, data, inits, priors,
           alpha.star.inits.fit <- alpha.star.inits
         }
 	# Random Occurrence Effects
-        lambda.psi.fit <- lambda.psi[-curr.set, , drop = FALSE]
-        lambda.psi.0 <- lambda.psi[curr.set, , drop = FALSE]
         X.re.fit <- X.re[-curr.set, , drop = FALSE]
         X.re.0 <- X.re[curr.set, , drop = FALSE]
         n.occ.re.fit <- length(unique(c(X.re.fit)))

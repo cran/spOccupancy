@@ -936,6 +936,7 @@ spPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     storage.mode(sigma.sq.psi.inits) <- "double"
     storage.mode(sigma.sq.psi.a) <- "double"
     storage.mode(sigma.sq.psi.b) <- "double"
+    storage.mode(n.occ.re.long) <- "integer"
     storage.mode(beta.star.inits) <- "double"
     storage.mode(beta.star.indx) <- "integer"
 

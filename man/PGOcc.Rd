@@ -180,6 +180,11 @@ PGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
     for the likelihood value associated with each site. Used for calculating
     WAIC.}
 
+  \item{rhat}{a list of Gelman-Rubin diagnostic values for some of the model
+    parameters.}
+
+  \item{ESS}{a list of effective sample sizes for some of the model parameters.}
+
   \item{run.time}{execution time reported using \code{proc.time()}.}
 
   \item{k.fold.deviance}{scoring rule (deviance) from k-fold cross-validation. 

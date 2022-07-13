@@ -208,6 +208,9 @@ extern "C" {
       Rprintf("\tChain %i\n", currChain);
       Rprintf("----------------------------------------\n");
       Rprintf("Sampling ... \n");
+      #ifdef Win32
+        R_FlushConsole();
+      #endif
     }
 
     /**********************************************************************
@@ -888,7 +891,6 @@ extern "C" {
 	        for(k = 0; k < nnIndxLU[J+jj]; k++){ // these are the neighbors of the jjth location
 	          kk = nnIndx[nnIndxLU[jj]+k]; // kk is the index for the jth locations neighbors
 	          if(kk != ii){ //if the neighbor of jj is not ii
-		    // TODO: check this. 
 	    	    b += B[ll*nIndx + nnIndxLU[jj]+k]*w[kk * q + ll]; //covariance between jj and kk and the random effect of kk
 	          }
 	        } // k
@@ -1208,9 +1210,9 @@ extern "C" {
           Rprintf("Batch: %i of %i, %3.2f%%\n", s, nBatch, 100.0*s/nBatch);
           Rprintf("\tLatent Factor\tParameter\tAcceptance\tTuning\n");	  
           for (ll = 0; ll < q; ll++) {
-            Rprintf("\t%i\t\t\tphi\t\t%3.1f\t\t%1.5f\n", ll + 1, 100.0*REAL(acceptSamples_r)[s * nThetaq + phiIndx * q + ll], exp(tuning[phiIndx * q + ll]));
+            Rprintf("\t%i\t\tphi\t\t%3.1f\t\t%1.5f\n", ll + 1, 100.0*REAL(acceptSamples_r)[s * nThetaq + phiIndx * q + ll], exp(tuning[phiIndx * q + ll]));
 	    if (corName == "matern") {
-            Rprintf("\t%i\t\t\tnu\t\t%3.1f\t\t%1.5f\n", ll + 1, 100.0*REAL(acceptSamples_r)[s * nThetaq + nuIndx * q + ll], exp(tuning[nuIndx * q + ll]));
+            Rprintf("\t%i\t\tnu\t\t%3.1f\t\t%1.5f\n", ll + 1, 100.0*REAL(acceptSamples_r)[s * nThetaq + nuIndx * q + ll], exp(tuning[nuIndx * q + ll]));
 	    }
           } // ll
           Rprintf("-------------------------------------------------\n");
