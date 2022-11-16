@@ -6,7 +6,8 @@ sfJSDM <- function(formula, data, inits, priors,
 		   n.omp.threads = 1, verbose = TRUE, n.report = 100, 
 		   n.burn = round(.10 * n.batch * batch.length), 
 		   n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		   k.fold.seed = 100, ...){
+		   k.fold.seed = 100, k.fold.only = FALSE, monitors, 
+		   keep.only.mean.95, ...){
 
   ptm <- proc.time()
 
@@ -46,6 +47,7 @@ sfJSDM <- function(formula, data, inits, priors,
     stop("error: data must be a list")
   }
   names(data) <- tolower(names(data))
+  data.orig <- data
   if (!'y' %in% names(data)) {
     stop("error: detection-nondetection data y must be specified in data")
   }
@@ -92,8 +94,7 @@ sfJSDM <- function(formula, data, inits, priors,
   data$covs <- as.data.frame(data$covs)
 
   # Checking missing values ---------------------------------------------
-  y.na.test <- apply(y, c(1, 2), function(a) sum(!is.na(a)))
-  if (sum(y.na.test == 0) > 0) {
+  if (sum(is.na(y) != 0)) {
     stop("error: some sites in y have missing data. Remove these from the data, and subsequently predict at those sites if interested.")
   }
   # occ.covs ------------------------
@@ -176,12 +177,6 @@ sfJSDM <- function(formula, data, inits, priors,
   if (p.occ.re > 1) {
     for (j in 2:p.occ.re) {
       X.re[, j] <- X.re[, j] + max(X.re[, j - 1]) + 1
-    }
-  }
-  lambda.psi <- matrix(0, J, n.occ.re)
-  if (p.occ.re > 0) {
-    for (i in 1:n.occ.re) {
-      lambda.psi[which(X.re == (i - 1), arr.ind = TRUE)[, 1], i] <- 1
     }
   }
   # Priors --------------------------------------------------------------
@@ -269,7 +264,9 @@ sfJSDM <- function(formula, data, inits, priors,
     tau.sq.beta.b <- rep(0.1, p.occ)
   }
   # phi -----------------------------
-  coords.D <- iDist(coords)
+  if (!NNGP) {
+    coords.D <- iDist(coords)
+  }
   # Get distance matrix which is used if priors are not specified
   if ("phi.unif" %in% names(priors)) {
     if (!is.list(priors$phi.unif) | length(priors$phi.unif) != 2) {
@@ -294,6 +291,9 @@ sfJSDM <- function(formula, data, inits, priors,
   } else {
     if (verbose) {
     message("No prior specified for phi.unif.\nSetting uniform bounds based on the range of observed spatial coordinates.\n")
+    }
+    if (NNGP) {
+      coords.D <- iDist(coords)
     }
     phi.a <- rep(3 / max(coords.D), q)
     phi.b <- rep(3 / sort(unique(c(coords.D)))[2], q)
@@ -486,9 +486,9 @@ sfJSDM <- function(formula, data, inits, priors,
   } else {
     lambda.inits <- matrix(0, N, q)
     diag(lambda.inits) <- 1
-    lambda.inits[lower.tri(lambda.inits)] <- rnorm(sum(lower.tri(lambda.inits)))
+    lambda.inits[lower.tri(lambda.inits)] <- 0
     if (verbose) {
-      message("lambda is not specified in initial values.\nSetting initial values of the lower triangle to random values from a standard normal\n")
+      message("lambda is not specified in initial values.\nSetting initial values of the lower triangle to 0\n")
     }
     # lambda.inits are organized by factor, then by species. This is necessary for working
     # with dgemv.  
@@ -515,9 +515,9 @@ sfJSDM <- function(formula, data, inits, priors,
     }
   }
 
+  if (p.occ.re > 0) {
   # sigma.sq.psi ------------------
   # ORDER: a length p.occ.re vector ordered by the random effects in the formula.
-  if (p.occ.re > 0) {
     if ("sigma.sq.psi" %in% names(inits)) {
       sigma.sq.psi.inits <- inits[["sigma.sq.psi"]]
       if (length(sigma.sq.psi.inits) != p.occ.re & length(sigma.sq.psi.inits) != 1) {
@@ -539,12 +539,56 @@ sfJSDM <- function(formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
-    beta.star.inits <- rep(beta.star.inits, N)
+  # beta.star -------------------------
+  # ORDER: an N x n.occ.re matrix of random effects values for different levels.
+  if ("beta.star" %in% names(inits)) {
+    beta.star.inits <- inits[["beta.star"]]
+    if (is.matrix(beta.star.inits)) {
+      if (ncol(beta.star.inits) != n.occ.re | nrow(beta.star.inits) != N) {
+        stop(paste("error: initial values for beta.star must be a matrix with dimensions ", 
+        	   N, "x", n.occ.re, " or a single numeric value", sep = ""))
+      }
+    }
+    if (!is.matrix(beta.star.inits) & length(beta.star.inits) != 1) {
+      stop(paste("error: initial values for beta.star must be a matrix with dimensions ", 
+      	   N, " x ", n.occ.re, " or a single numeric value", sep = ""))
+    }
+    if (length(beta.star.inits) == 1) {
+      beta.star.inits <- matrix(beta.star.inits, N, n.occ.re)
+    }
+    beta.star.inits <- t(beta.star.inits)
+  } else {
+      beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+      beta.star.inits <- rep(beta.star.inits, N)
+      if (verbose) {
+        message('beta.star is not specified in initial values.\nSetting initial values to random values from the random effects variance\n')
+      }
+  }
+  beta.star.inits <- c(beta.star.inits)
   } else {
     sigma.sq.psi.inits <- 0
     beta.star.indx <- 0
     beta.star.inits <- 0
+  }
+  # w -----------------------------
+  if ("w" %in% names(inits)) {
+    w.inits <- inits[["w"]]
+    if (!is.matrix(w.inits)) {
+      stop(paste("error: initial values for w must be a matrix with dimensions ",
+      	   q, " x ", J, sep = ""))
+    }
+    if (nrow(w.inits) != q | ncol(w.inits) != J) {
+      stop(paste("error: initial values for w must be a matrix with dimensions ",
+      	   q, " x ", J, sep = ""))
+    }
+    if (NNGP) {
+      w.inits <- w.inits[, ord]
+    }
+  } else {
+    w.inits <- matrix(0, q, J)
+    if (verbose) {
+      message("w is not specified in initial values.\nSetting initial value to 0\n")
+    }
   }
   # Should initial values be fixed --
   if ("fix" %in% names(inits)) {
@@ -653,6 +697,60 @@ sfJSDM <- function(formula, data, inits, priors,
     u.indx.lu <- indx$u.indx.lu
     ui.indx <- indx$ui.indx
     u.indx.run.time <- indx$run.time
+
+    # Determine parameters that are monitored -----------------------------
+    # The monitored parameters will be directly manipulated on the C side 
+    n.track <- 11
+    beta.comm.monitor <- 1
+    tau.sq.beta.monitor <- 2
+    beta.monitor <- 3
+    z.monitor <- 4
+    psi.monitor <- 5
+    lambda.monitor <- 6
+    theta.monitor <- 7
+    w.monitor <- 8
+    like.monitor <- 9
+    beta.star.monitor <- 10 
+    sigma.sq.psi.monitor <- 11
+    if (missing(monitors)) {
+      monitors <- rep(1, n.track) 
+    } else {
+      monitors.input <- monitors
+      monitors <- rep(0, n.track)
+      if ('beta.comm' %in% monitors.input) {
+        monitors[beta.comm.monitor] <- 1
+      }
+      if ('tau.sq.beta' %in% monitors.input) {
+        monitors[tau.sq.beta.monitor] <- 1
+      }
+      if ('beta' %in% monitors.input) {
+        monitors[beta.monitor] <- 1
+      }
+      if ('z' %in% monitors.input) {
+        monitors[z.monitor] <- 1
+      }
+      if ('psi' %in% monitors.input) {
+        monitors[psi.monitor] <- 1
+      }
+      if ('lambda' %in% monitors.input) {
+        monitors[lambda.monitor] <- 1
+      }
+      if ('theta' %in% monitors.input) {
+        monitors[theta.monitor] <- 1
+      }
+      if ('w' %in% monitors.input) {
+        monitors[w.monitor] <- 1
+      }
+      if ('like' %in% monitors.input) {
+        monitors[like.monitor] <- 1
+      }
+      if ('beta.star' %in% monitors.input) {
+        monitors[beta.star.monitor] <- 1
+      }
+      if ('sigma.sq.psi' %in% monitors.input) {
+        monitors[sigma.sq.psi.monitor] <- 1
+      }
+    }
     
     # Set storage for all variables ---------------------------------------
     storage.mode(y) <- "double"
@@ -707,168 +805,290 @@ sfJSDM <- function(formula, data, inits, priors,
     storage.mode(sigma.sq.psi.b) <- "double"
     storage.mode(beta.star.inits) <- "double"
     storage.mode(beta.star.indx) <- "integer"
+    # Monitors
+    storage.mode(monitors) <- "integer"
+    # Initial seed
+    if (! exists(".Random.seed")) runif(1)
+    init.seed <- .Random.seed
 
     # Fit the model -------------------------------------------------------
     out.tmp <- list()
-    for (i in 1:n.chains) {
-      # Change initial values if i > 1
-      if ((i > 1) & (!fix.inits)) {
-        beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
-        tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
-        beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-              		     sqrt(tau.sq.beta.inits)), N, p.occ)
-        beta.inits <- c(beta.inits)
-        lambda.inits <- matrix(0, N, q)
-        diag(lambda.inits) <- 1
-        lambda.inits[lower.tri(lambda.inits)] <- rnorm(sum(lower.tri(lambda.inits)))
-        lambda.inits <- c(lambda.inits)
-        phi.inits <- runif(q, phi.a, phi.b)
-        if (cov.model == 'matern') {
-          nu.inits <- runif(q, nu.a, nu.b)
-        }
-	if (p.occ.re > 0) {
-          sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-          beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
-          beta.star.inits <- rep(beta.star.inits, N)
-	}
-      }
-
-      storage.mode(chain.info) <- "integer"
-      # Run the model in C
-      # Getting real close to 65 arguments....
-      out.tmp[[i]] <- .Call("sfJSDMNNGP", y, X, coords, X.re, consts, n.occ.re.long, 
-        	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
-        	            beta.inits, beta.comm.inits, tau.sq.beta.inits, phi.inits, 
-        	            lambda.inits, nu.inits, sigma.sq.psi.inits, beta.star.inits, 
-			    beta.star.indx, beta.level.indx, mu.beta.comm, Sigma.beta.comm, 
-        	            tau.sq.beta.a, tau.sq.beta.b, phi.a, phi.b,
-        	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-			    tuning.c, cov.model.indx, n.batch, 
-        	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-        	            samples.info, chain.info)
-      chain.info[1] <- chain.info[1] + 1
-    }
-    # Calculate R-Hat ---------------
+    # Random seed information for each chain of the model. 
+    seeds.list <- list()
     out <- list()
-    out$rhat <- list()
-    if (n.chains > 1) {
-      # as.vector removes the "Upper CI" when there is only 1 variable. 
-      out$rhat$beta.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-      					      mcmc(t(a$beta.comm.samples)))), 
-      			     autoburnin = FALSE)$psrf[, 2])
-      out$rhat$tau.sq.beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-      					      mcmc(t(a$tau.sq.beta.samples)))), 
-      			     autoburnin = FALSE)$psrf[, 2])
-      out$rhat$beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-      					         mcmc(t(a$beta.samples)))), 
-      			     autoburnin = FALSE)$psrf[, 2])
-      out$rhat$theta <- gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-      					      mcmc(t(a$theta.samples)))), 
-      			      autoburnin = FALSE)$psrf[, 2]
-      lambda.mat <- matrix(lambda.inits, N, q)
-      out$rhat$lambda.lower.tri <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-						       mcmc(t(a$lambda.samples[c(lower.tri(lambda.mat)), ])))), 
-						       autoburnin = FALSE)$psrf[, 2])
-      if (p.occ.re > 0) {
-        out$rhat$sigma.sq.psi <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
-						      mcmc(t(a$sigma.sq.psi.samples)))), 
-				     autoburnin = FALSE)$psrf[, 2])
+    if (!k.fold.only) {
+      for (i in 1:n.chains) {
+        # Change initial values if i > 1
+        if ((i > 1) & (!fix.inits)) {
+          beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
+          tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
+          beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
+                		     sqrt(tau.sq.beta.inits)), N, p.occ)
+          beta.inits <- c(beta.inits)
+          lambda.inits <- matrix(0, N, q)
+          diag(lambda.inits) <- 1
+          lambda.inits[lower.tri(lambda.inits)] <- rnorm(sum(lower.tri(lambda.inits)))
+          lambda.inits <- c(lambda.inits)
+          phi.inits <- runif(q, phi.a, phi.b)
+          if (cov.model == 'matern') {
+            nu.inits <- runif(q, nu.a, nu.b)
+          }
+          if (p.occ.re > 0) {
+            sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
+            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rep(beta.star.inits, N)
+          }
+        }
+
+        storage.mode(chain.info) <- "integer"
+        # Run the model in C
+        out.tmp[[i]] <- .Call("sfJSDMNNGP", y, X, coords, X.re, consts, n.occ.re.long, 
+          	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
+          	            beta.inits, beta.comm.inits, tau.sq.beta.inits, phi.inits, 
+          	            lambda.inits, nu.inits, sigma.sq.psi.inits, beta.star.inits, w.inits,
+          		    beta.star.indx, beta.level.indx, mu.beta.comm, Sigma.beta.comm, 
+          	            tau.sq.beta.a, tau.sq.beta.b, phi.a, phi.b,
+          	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+          		    tuning.c, cov.model.indx, n.batch, 
+          	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+          	            samples.info, chain.info, monitors)
+        chain.info[1] <- chain.info[1] + 1
+	seeds.list[[i]] <- .Random.seed
       }
-    } else {
-      out$rhat$beta.comm <- rep(NA, p.occ)
-      out$rhat$tau.sq.beta <- rep(NA, p.occ)
-      out$rhat$beta <- rep(NA, p.occ * N)
-      out$rhat$theta <- rep(NA, ifelse(cov.model == 'matern', 2 * q, q))
-      if (p.occ.re > 0) {
-        out$rhat$sigma.sq.psi <- rep(NA, p.occ.re)
+      # Calculate R-Hat ---------------
+      out <- list()
+      out$rhat <- list()
+      if (n.chains > 1) {
+        # as.vector removes the "Upper CI" when there is only 1 variable. 
+        if (monitors[beta.comm.monitor]) {
+          out$rhat$beta.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+          					      mcmc(t(a$beta.comm.samples)))), 
+          			     autoburnin = FALSE)$psrf[, 2])
+        }
+        if (monitors[tau.sq.beta.monitor]) {
+          out$rhat$tau.sq.beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+        					      mcmc(t(a$tau.sq.beta.samples)))), 
+        			     autoburnin = FALSE)$psrf[, 2])
+        }
+        if (monitors[beta.monitor]) {
+          out$rhat$beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+        					         mcmc(t(a$beta.samples)))), 
+        			     autoburnin = FALSE)$psrf[, 2])
+        }
+        if (monitors[theta.monitor]) {
+          out$rhat$theta <- gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+        					      mcmc(t(a$theta.samples)))), 
+        			      autoburnin = FALSE)$psrf[, 2]
+        }
+        if (monitors[lambda.monitor]) {
+          lambda.mat <- matrix(lambda.inits, N, q)
+          out$rhat$lambda.lower.tri <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+          					       mcmc(t(a$lambda.samples[c(lower.tri(lambda.mat)), ])))), 
+          					       autoburnin = FALSE)$psrf[, 2])
+        }
+        if (p.occ.re > 0) {
+          if (monitors[sigma.sq.psi.monitor]) {
+            out$rhat$sigma.sq.psi <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
+          					      mcmc(t(a$sigma.sq.psi.samples)))), 
+          			     autoburnin = FALSE)$psrf[, 2])
+          }
+        }
+      } else {
+        out$rhat$beta.comm <- rep(NA, p.occ)
+        out$rhat$tau.sq.beta <- rep(NA, p.occ)
+        out$rhat$beta <- rep(NA, p.occ * N)
+        out$rhat$theta <- rep(NA, ifelse(cov.model == 'matern', 2 * q, q))
+        if (p.occ.re > 0) {
+          out$rhat$sigma.sq.psi <- rep(NA, p.occ.re)
+        }
       }
-    }
 
-    # Put everything into MCMC objects
-    out$beta.comm.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$beta.comm.samples))))
-    colnames(out$beta.comm.samples) <- x.names
-    out$tau.sq.beta.samples <- mcmc(do.call(rbind, 
-      				lapply(out.tmp, function(a) t(a$tau.sq.beta.samples))))
-    colnames(out$tau.sq.beta.samples) <- x.names
+      # Put everything into MCMC objects
+      if (monitors[beta.comm.monitor]) {
+        out$beta.comm.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$beta.comm.samples))))
+        colnames(out$beta.comm.samples) <- x.names
+      }
+      if (monitors[tau.sq.beta.monitor]) {
+        out$tau.sq.beta.samples <- mcmc(do.call(rbind, 
+          				lapply(out.tmp, function(a) t(a$tau.sq.beta.samples))))
+        colnames(out$tau.sq.beta.samples) <- x.names
+      }
 
-    if (is.null(sp.names)) {
-      sp.names <- paste('sp', 1:N, sep = '')
-    }
-    coef.names <- paste(rep(x.names, each = N), sp.names, sep = '-')
-    out$beta.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$beta.samples))))
-    colnames(out$beta.samples) <- coef.names
-    if (p.occ.re > 0) {
-      out$sigma.sq.psi.samples <- mcmc(
-        do.call(rbind, lapply(out.tmp, function(a) t(a$sigma.sq.psi.samples))))
-      colnames(out$sigma.sq.psi.samples) <- x.re.names
-      out$beta.star.samples <- mcmc(
-        do.call(rbind, lapply(out.tmp, function(a) t(a$beta.star.samples))))
-      tmp.names <- unlist(re.level.names)
-      beta.star.names <- paste(rep(x.re.names, n.occ.re.long), tmp.names, sep = '-')
-      beta.star.names <- paste(beta.star.names, rep(sp.names, each = n.occ.re), sep = '-')
-      colnames(out$beta.star.samples) <- beta.star.names
-      out$re.level.names <- re.level.names
-    }
-    loadings.names <- paste(rep(sp.names, times = n.factors), rep(1:n.factors, each = N), sep = '-')
-    out$lambda.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$lambda.samples))))
-    colnames(out$lambda.samples) <- loadings.names
-    out$theta.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$theta.samples))))
-    if (cov.model != 'matern') {
-      theta.names <- paste(rep(c('phi'), each = q), 1:q, sep = '-')
-    } else {
-      theta.names <- paste(rep(c('phi', 'nu'), each = q), 1:q, sep = '-')
-    } 
-    colnames(out$theta.samples) <- theta.names
+      if (is.null(sp.names)) {
+        sp.names <- paste('sp', 1:N, sep = '')
+      }
+      coef.names <- paste(rep(x.names, each = N), sp.names, sep = '-')
+      if (monitors[beta.monitor]) {
+        out$beta.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$beta.samples))))
+        colnames(out$beta.samples) <- coef.names
+      }
+      if (p.occ.re > 0) {
+        if (monitors[sigma.sq.psi.monitor]) {
+          out$sigma.sq.psi.samples <- mcmc(
+            do.call(rbind, lapply(out.tmp, function(a) t(a$sigma.sq.psi.samples))))
+          colnames(out$sigma.sq.psi.samples) <- x.re.names
+        }
+        if (monitors[beta.star.monitor]) {
+          out$beta.star.samples <- mcmc(
+            do.call(rbind, lapply(out.tmp, function(a) t(a$beta.star.samples))))
+          tmp.names <- unlist(re.level.names)
+          beta.star.names <- paste(rep(x.re.names, n.occ.re.long), tmp.names, sep = '-')
+          beta.star.names <- paste(beta.star.names, rep(sp.names, each = n.occ.re), sep = '-')
+          colnames(out$beta.star.samples) <- beta.star.names
+        }
+        out$re.level.names <- re.level.names
+      }
+      loadings.names <- paste(rep(sp.names, times = n.factors), rep(1:n.factors, each = N), sep = '-')
+      if (monitors[lambda.monitor]) {
+        out$lambda.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$lambda.samples))))
+        colnames(out$lambda.samples) <- loadings.names
+      }
+      if (cov.model != 'matern') {
+        theta.names <- paste(rep(c('phi'), each = q), 1:q, sep = '-')
+      } else {
+        theta.names <- paste(rep(c('phi', 'nu'), each = q), 1:q, sep = '-')
+      } 
+      if (monitors[theta.monitor]) {
+        out$theta.samples <- mcmc(do.call(rbind, lapply(out.tmp, function(a) t(a$theta.samples))))
+        colnames(out$theta.samples) <- theta.names
+      }
 
-    # Return things back in the original order. 
-    out$w.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$w.samples, 
-      								dim = c(q, J, n.post.samples))))
-    out$w.samples <- out$w.samples[, order(ord), , drop = FALSE]
-    out$w.samples <- aperm(out$w.samples, c(3, 1, 2))
-    out$psi.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$psi.samples, 
-      								dim = c(N, J, n.post.samples))))
-    out$psi.samples <- out$psi.samples[, order(ord), ]
-    out$psi.samples <- aperm(out$psi.samples, c(3, 1, 2))
-    out$like.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$like.samples, 
-      								dim = c(N, J, n.post.samples))))
-    out$like.samples <- out$like.samples[, order(ord), ]
-    out$like.samples <- aperm(out$like.samples, c(3, 1, 2))
-    out$z.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$z.samples, 
-      								dim = c(N, J, n.post.samples))))
-    out$z.samples <- out$z.samples[, order(ord), ]
-    out$z.samples <- aperm(out$z.samples, c(3, 1, 2))
-    out$X.re <- X.re[order(ord), , drop = FALSE]
-    out$lambda.psi <- lambda.psi[order(ord), , drop = FALSE]
-    # Calculate effective sample sizes
-    out$ESS <- list()
-    out$ESS$beta.comm <- effectiveSize(out$beta.comm.samples)
-    out$ESS$tau.sq.beta <- effectiveSize(out$tau.sq.beta.samples)
-    out$ESS$beta <- effectiveSize(out$beta.samples)
-    out$ESS$theta <- effectiveSize(out$theta.samples)
-    out$ESS$lambda <- effectiveSize(out$lambda.samples)
-    if (p.occ.re > 0) {
-      out$ESS$sigma.sq.psi <- effectiveSize(out$sigma.sq.psi.samples)
-    }
-    out$X <- X[order(ord), , drop = FALSE]
-    out$y <- y.big[, order(ord), drop = FALSE]
-    out$call <- cl
-    out$n.samples <- n.samples
-    out$x.names <- x.names
-    out$sp.names <- sp.names
-    out$theta.names <- theta.names
-    out$type <- "NNGP"
-    out$coords <- coords[order(ord), ]
-    out$cov.model.indx <- cov.model.indx
-    out$n.neighbors <- n.neighbors
-    out$q <- q
-    out$n.post <- n.post.samples
-    out$n.thin <- n.thin
-    out$n.burn <- n.burn
-    out$n.chains <- n.chains
-    if (p.occ.re > 0) {
-      out$psiRE <- TRUE
-    } else {
-      out$psiRE <- FALSE
+      # Return things back in the original order. 
+      if (monitors[w.monitor]) {
+        out$w.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$w.samples, 
+          								dim = c(q, J, n.post.samples))))
+        out$w.samples <- out$w.samples[, order(ord), , drop = FALSE]
+        out$w.samples <- aperm(out$w.samples, c(3, 1, 2))
+      }
+      if (monitors[psi.monitor]) {
+        out$psi.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$psi.samples, 
+          								dim = c(N, J, n.post.samples))))
+        out$psi.samples <- out$psi.samples[, order(ord), ]
+        out$psi.samples <- aperm(out$psi.samples, c(3, 1, 2))
+      }
+      if (monitors[like.monitor]) {
+        out$like.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$like.samples, 
+          								dim = c(N, J, n.post.samples))))
+        out$like.samples <- out$like.samples[, order(ord), ]
+        out$like.samples <- aperm(out$like.samples, c(3, 1, 2))
+      }
+      if (monitors[z.monitor]) {
+        out$z.samples <- do.call(abind, lapply(out.tmp, function(a) array(a$z.samples, 
+          								dim = c(N, J, n.post.samples))))
+        out$z.samples <- out$z.samples[, order(ord), ]
+        out$z.samples <- aperm(out$z.samples, c(3, 1, 2))
+      }
+      out$X.re <- X.re[order(ord), , drop = FALSE]
+      # Calculate effective sample sizes
+      out$ESS <- list()
+      if (monitors[beta.comm.monitor]) {
+        out$ESS$beta.comm <- effectiveSize(out$beta.comm.samples)
+      }
+      if (monitors[tau.sq.beta.monitor]) {
+        out$ESS$tau.sq.beta <- effectiveSize(out$tau.sq.beta.samples)
+      }
+      if (monitors[beta.monitor]) {
+        out$ESS$beta <- effectiveSize(out$beta.samples)
+      }
+      if (monitors[theta.monitor]) {
+        out$ESS$theta <- effectiveSize(out$theta.samples)
+      }
+      if (monitors[lambda.monitor]) {
+        out$ESS$lambda <- effectiveSize(out$lambda.samples)
+      }
+      if (p.occ.re > 0) {
+        if (monitors[sigma.sq.psi.monitor]) {
+          out$ESS$sigma.sq.psi <- effectiveSize(out$sigma.sq.psi.samples)
+        }
+      }
+      # Only save 95% CIs and means for certain variables
+      get.vals <- function(a) {
+        tmp <- rbind(apply(a, 2, mean), apply(a, 2, quantile, c(0.025, 0.975)))
+        row.names(tmp) <- c('mean', '0.025', '0.975')
+        tmp
+      }
+      get.vals.big <- function(a) {
+        tmp <- abind(array(apply(a, c(2, 3), mean), dim = c(1, N, J)), 
+          	   apply(a, c(2, 3), quantile, c(0.025, 0.975)), along = 1)
+        row.names(tmp) <- c('mean', '0.025', '0.975')
+        tmp
+      }
+      if (!missing(keep.only.mean.95)) {
+        if('beta.comm' %in% keep.only.mean.95) {
+          out$beta.comm.samples <- get.vals(out$beta.comm.samples)
+        }  
+        if('tau.sq.beta' %in% keep.only.mean.95) {
+          out$tau.sq.beta.samples <- get.vals(out$tau.sq.beta.samples)
+        }  
+        if('beta' %in% keep.only.mean.95) {
+          out$beta.samples <- get.vals(out$beta.samples)
+        }  
+        if('z' %in% keep.only.mean.95) {
+          out$z.samples <- get.vals.big(out$z.samples)
+        }  
+        if('psi' %in% keep.only.mean.95) {
+          out$psi.samples <- get.vals.big(out$psi.samples)
+        }  
+        if('lambda' %in% keep.only.mean.95) {
+          out$lambda.samples <- get.vals(out$lambda.samples)
+        }  
+        if('theta' %in% keep.only.mean.95) {
+          out$theta.samples <- get.vals(out$theta.samples)
+        }  
+        if('w' %in% keep.only.mean.95) {
+          out$w.samples <- get.vals.big(out$w.samples)
+        }  
+        if('like' %in% keep.only.mean.95) {
+          out$like.samples <- get.vals.big(out$like.samples)
+        }  
+        if('sigma.sq.psi' %in% keep.only.mean.95) {
+          out$sigma.sq.psi.samples <- get.vals(out$sigma.sq.psi.samples)
+        }  
+        if('beta.star' %in% keep.only.mean.95) {
+          out$beta.star.samples <- get.vals(out$beta.star.samples)
+        }  
+      }
+      out$X <- X[order(ord), , drop = FALSE]
+      out$y <- y.big[, order(ord), drop = FALSE]
+      out$call <- cl
+      out$n.samples <- n.samples
+      out$x.names <- x.names
+      out$sp.names <- sp.names
+      out$theta.names <- theta.names
+      out$type <- "NNGP"
+      out$coords <- coords[order(ord), ]
+      out$cov.model.indx <- cov.model.indx
+      out$n.neighbors <- n.neighbors
+      out$q <- q
+      out$n.post <- n.post.samples
+      out$n.thin <- n.thin
+      out$n.burn <- n.burn
+      out$n.chains <- n.chains
+      out$monitors <- monitors
+      # Send out objects needed for updateMCMC 
+      update.list <- list()
+      tmp.val <- ifelse(cov.model == 'matern', q * 3, q * 2)
+      update.list$tuning <- matrix(NA, tmp.val, n.chains)
+      for (i in 1:n.chains) {
+        update.list$tuning[, i] <- exp(out.tmp[[i]]$tuning)
+      }
+      update.list$accept.rate <- accept.rate
+      update.list$n.batch <- n.batch
+      update.list$batch.length <- batch.length
+      update.list$n.omp.threads <- n.omp.threads
+      update.list$data <- data.orig
+      update.list$cov.model <- cov.model
+      update.list$priors <- priors
+      update.list$search.type <- search.type
+      update.list$formula <- formula
+      # Random seed to have for updating. 
+      update.list$final.seed <- seeds.list
+      out$update <- update.list
+      if (p.occ.re > 0) {
+        out$psiRE <- TRUE
+      } else {
+        out$psiRE <- FALSE
+      }
     }
 
     # K-fold cross-validation -------
@@ -881,6 +1101,7 @@ sfJSDM <- function(formula, data, inits, priors,
       	      " thread(s).", sep = ''))
       }
       # Currently implemented without parellization. 
+      # TODO: don't think this works when updating. 
       set.seed(k.fold.seed)
       # Number of sites in each hold out data set. 
       sites.random <- sample(1:J)    
@@ -896,17 +1117,19 @@ sfJSDM <- function(formula, data, inits, priors,
         y.big.0 <- y.big[, curr.set, drop = FALSE]
         X.fit <- X[-curr.set, , drop = FALSE]
         X.0 <- X[curr.set, , drop = FALSE]
+	w.inits.fit <- w.inits[, curr.set, drop = FALSE]
         coords.fit <- coords[-curr.set, , drop = FALSE]
         coords.0 <- coords[curr.set, , drop = FALSE]
         J.fit <- nrow(X.fit)
         J.0 <- nrow(X.0)
-	# Random occurrence effects
-	lambda.psi.fit <- lambda.psi[-curr.set, , drop = FALSE]
-	lambda.psi.0 <- lambda.psi[curr.set, , drop = FALSE]
 	X.re.fit <- X.re[-curr.set, , drop = FALSE]
 	X.re.0 <- X.re[curr.set, , drop = FALSE]
 	n.occ.re.fit <- length(unique(c(X.re.fit)))
-        n.occ.re.long.fit <- apply(X.re.fit, 2, function(a) length(unique(a)))
+	if (n.occ.re.fit == 0) {
+          n.occ.re.long.fit <- 0
+	} else {
+          n.occ.re.long.fit <- apply(X.re.fit, 2, function(a) length(unique(a)))
+	}
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
 	  beta.level.indx.fit <- sort(unique(c(X.re.fit)))
@@ -916,8 +1139,8 @@ sfJSDM <- function(formula, data, inits, priors,
           re.level.names.fit <- list()
 	  for (t in 1:p.occ.re) {
             tmp.indx <- beta.level.indx.fit[beta.star.indx.fit == t - 1]
-            re.level.names.fit[[t]] <- re.level.names[[t]][tmp.indx + 1]    
-	  }
+            re.level.names.fit[[t]] <- unlist(re.level.names)[tmp.indx + 1]    
+          }
 	} else {
           beta.star.indx.fit <- beta.star.indx
 	  beta.level.indx.fit <- beta.level.indx
@@ -966,6 +1189,8 @@ sfJSDM <- function(formula, data, inits, priors,
 	storage.mode(beta.level.indx.fit) <- "integer"
         chain.info[1] <- 1
         storage.mode(chain.info) <- "integer"
+	monitors.fit <- rep(1, n.track)
+	storage.mode(monitors.fit) <- "integer"
 
       out.fit <- .Call("sfJSDMNNGP", y.fit, X.fit, coords.fit, 
 		       X.re.fit, consts.fit, n.occ.re.long.fit, 
@@ -973,14 +1198,14 @@ sfJSDM <- function(formula, data, inits, priors,
 		       u.indx.lu.fit, ui.indx.fit, beta.inits, 
         	       beta.comm.inits, tau.sq.beta.inits, phi.inits, 
         	       lambda.inits, nu.inits, sigma.sq.psi.inits,
-		       beta.star.inits.fit, beta.star.indx.fit, beta.level.indx.fit, 
+		       beta.star.inits.fit, w.inits.fit, beta.star.indx.fit, beta.level.indx.fit, 
 		       mu.beta.comm, Sigma.beta.comm,
         	       tau.sq.beta.a, tau.sq.beta.b, phi.a, phi.b,
         	       nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
 		       tuning.c, cov.model.indx, n.batch, 
         	       batch.length, accept.rate, n.omp.threads.fit, 
 		       verbose.fit, n.report, 
-        	       samples.info, chain.info)
+        	       samples.info, chain.info, monitors.fit)
 
         if (is.null(sp.names)) {
           sp.names <- paste('sp', 1:N, sep = '')
@@ -989,6 +1214,11 @@ sfJSDM <- function(formula, data, inits, priors,
         out.fit$beta.samples <- mcmc(t(out.fit$beta.samples))
         colnames(out.fit$beta.samples) <- coef.names
         out.fit$theta.samples <- mcmc(t(out.fit$theta.samples))
+        if (cov.model != 'matern') {
+          theta.names <- paste(rep(c('phi'), each = q), 1:q, sep = '-')
+        } else {
+          theta.names <- paste(rep(c('phi', 'nu'), each = q), 1:q, sep = '-')
+        } 
         colnames(out.fit$theta.samples) <- theta.names
         out.fit$w.samples <- array(out.fit$w.samples, dim = c(q, J, n.post.samples))
         out.fit$w.samples <- aperm(out.fit$w.samples, c(3, 1, 2))
@@ -1025,7 +1255,7 @@ sfJSDM <- function(formula, data, inits, priors,
         class(out.fit) <- "sfJSDM"
 
         # Predict occurrence at new sites. 
-	if (p.occ.re > 0) {X.0 <- cbind(X.0, X.re.0)}
+	if (p.occ.re > 0) {X.0 <- cbind(X.0, X.re.0 + 1)}
         out.pred <- predict.sfJSDM(out.fit, X.0, 
 				      coords.0, verbose = FALSE, ignore.RE = FALSE)
 	like.samples <- matrix(NA, N, J.0)
