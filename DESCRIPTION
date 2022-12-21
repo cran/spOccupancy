@@ -2,7 +2,7 @@ Package: spOccupancy
 Type: Package
 Title: Single-Species, Multi-Species, and Integrated Spatial Occupancy
         Models
-Version: 0.5.1
+Version: 0.5.2
 Authors@R: c(person("Jeffrey", "Doser", role=c("aut", "cre"), email="doserjef@msu.edu"), person("Andrew", "Finley", role = c("aut")), person("Marc", "Kery", role = c('ctb')))
 Author: Jeffrey Doser [aut, cre],
   Andrew Finley [aut],
@@ -20,6 +20,6 @@ Depends: R (>= 3.5.0)
 Imports: stats, coda, abind, RANN, lme4, foreach, doParallel, methods
 Suggests: testthat
 NeedsCompilation: yes
-Packaged: 2022-12-08 21:06:31 UTC; jeffdoser
+Packaged: 2022-12-21 15:31:27 UTC; jeffdoser
 Repository: CRAN
-Date/Publication: 2022-12-08 21:50:02 UTC
+Date/Publication: 2022-12-21 16:10:02 UTC
