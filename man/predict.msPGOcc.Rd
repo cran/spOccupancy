@@ -129,3 +129,4 @@ summary(out, level = 'community')
 # Predict at new locations ------------------------------------------------
 out.pred <- predict(out, X.0)
 }
+

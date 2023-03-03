@@ -46,12 +46,14 @@ install.packages("spOccupancy")
 | `sfJSDM()`             | Spatial joint species distribution model without imperfect detection      |
 | `lfMsPGOcc()`          | Multi-species occupancy model with species correlations                   |
 | `sfMsPGOcc()`          | Multi-species spatial occupancy model with species correlations           |
+| `intMsPGOcc()`         | Multi-species occupancy model with multiple data sources                  |
 | `tPGOcc()`             | Single-species multi-season occupancy model                               |
 | `stPGOcc()`            | Single-species multi-season spatio-temporal occupancy model               |
 | `svcPGBinom()`         | Single-species spatially-varying coefficient GLM                          |
 | `svcPGOcc()`           | Single-species spatially-varying coefficient occupancy model              |
 | `svcTPGBinom()`        | Single-species spatially-varying coefficient multi-season GLM             |
 | `svcTPGOcc()`          | Single-sepcies spatially-varying coefficient multi-season occupancy model |
+| `postHocLM()`          | Fit a linear (mixed) model using estimates from a previous model fit      |
 | `ppcOcc()`             | Posterior predictive check using Bayesian p-values                        |
 | `waicOcc()`            | Compute Widely Applicable Information Criterion (WAIC)                    |
 | `simOcc()`             | Simulate single-species occupancy data                                    |
@@ -60,6 +62,7 @@ install.packages("spOccupancy")
 | `simTBinom()`          | Simulate multi-season detection-nondetection data with perfect detection  |
 | `simMsOcc()`           | Simulate multi-species occupancy data                                     |
 | `simIntOcc()`          | Simulate single-species occupancy data from multiple data sources         |
+| `simIntMsOcc()`        | Simulate multi-species occupancy data from multiple data sources          |
 
 ## Example usage
 
@@ -138,25 +141,25 @@ summary(out)
 #> Thinning Rate: 4
 #> Number of Chains: 3
 #> Total Posterior Samples: 6000
-#> Run Time (min): 1.4542
+#> Run Time (min): 1.4416
 #> 
 #> Occurrence (logit scale): 
 #>                          Mean     SD    2.5%     50%   97.5%   Rhat  ESS
-#> (Intercept)            3.9665 0.5654  3.0288  3.8974  5.2823 1.0141  227
-#> scale(Elevation)      -0.5265 0.2105 -0.9688 -0.5212 -0.1247 1.0064 1160
-#> I(scale(Elevation)^2) -1.1461 0.2062 -1.6103 -1.1264 -0.7948 1.0112  334
+#> (Intercept)            3.9738 0.6010  3.0092  3.9023  5.3748 1.0144  164
+#> scale(Elevation)      -0.5209 0.2194 -0.9778 -0.5152 -0.0984 1.0003 1101
+#> I(scale(Elevation)^2) -1.1552 0.2118 -1.6305 -1.1370 -0.7892 1.0070  238
 #> 
 #> Detection (logit scale): 
 #>                    Mean     SD    2.5%     50%  97.5%   Rhat  ESS
-#> (Intercept)      0.6622 0.1138  0.4430  0.6609 0.8847 1.0003 5747
-#> scale(day)       0.2905 0.0700  0.1545  0.2875 0.4279 1.0052 5758
-#> scale(tod)      -0.0310 0.0698 -0.1687 -0.0320 0.1047 1.0007 6000
-#> I(scale(day)^2) -0.0748 0.0863 -0.2443 -0.0748 0.0929 1.0003 6000
+#> (Intercept)      0.6642 0.1146  0.4413  0.6634 0.8821 1.0014 5474
+#> scale(day)       0.2939 0.0712  0.1524  0.2939 0.4335 0.9999 6000
+#> scale(tod)      -0.0301 0.0697 -0.1698 -0.0302 0.1063 1.0010 6435
+#> I(scale(day)^2) -0.0747 0.0862 -0.2410 -0.0755 0.1033 1.0027 6000
 #> 
 #> Spatial Covariance: 
-#>            Mean    SD   2.5%    50%  97.5%   Rhat ESS
-#> sigma.sq 1.0404 0.881 0.1858 0.7833 3.4004 1.1125  73
-#> phi      0.0089 0.008 0.0008 0.0057 0.0281 1.3323  73
+#>            Mean     SD   2.5%    50%  97.5%   Rhat ESS
+#> sigma.sq 1.1194 1.0085 0.2165 0.7676 4.1197 1.0419  88
+#> phi      0.0072 0.0075 0.0007 0.0039 0.0270 1.1564  58
 ```
 
 ### Posterior predictive check
@@ -182,7 +185,7 @@ summary(ppc.out)
 #> Number of Chains: 3
 #> Total Posterior Samples: 6000
 #> 
-#> Bayesian p-value:  0.4935 
+#> Bayesian p-value:  0.4917 
 #> Fit statistic:  freeman-tukey
 ```
 
@@ -194,8 +197,8 @@ due to Monte Carlo error your results will differ slightly).
 
 ``` r
 waicOcc(out)
-#>      elpd        pD      WAIC 
-#> -682.3281   20.9123 1406.4808
+#>       elpd         pD       WAIC 
+#> -681.52155   21.21463 1405.47236
 ```
 
 Alternatively, we can perform k-fold cross-validation (CV) directly in
@@ -208,7 +211,7 @@ value of this CV score.
 
 ``` r
 out$k.fold.deviance
-#> [1] 1414.17
+#> [1] 1412.951
 ```
 
 ### Prediction
@@ -242,8 +245,10 @@ for full statistical details. For a description and tutorial of
 multi-season (spatio-temporal) occupancy models in `spOccupancy`, see
 `vignette("spaceTimeModels")`. For a tutorial on spatially-varying
 coefficient models in `spOccupancy`, see `vignette("svcUnivariateHTML")`
-and keep your eyes out for an upcoming preprint providing
-recommendations and guidelines on using these models.
+and take a look at [our recent
+pre-print](https://arxiv.org/abs/2301.05645) that presents a series of
+guidelines and recommendations for using spatially-varying coefficients
+in species distribution models.
 
 ## References
 
@@ -252,7 +257,12 @@ spOccupancy: An R package for single-species, multi-species, and
 integrated spatial occupancy models. Methods in Ecology and Evolution.
 <https://doi.org/10.1111/2041-210X.13897>.
 
-Doser, J. W., Finley, A. O., and Banerjee, S. (2022b) Joint species
+Doser, J. W., Finley, A. O., and Banerjee, S. (2022b). Joint species
 distribution models with imperfect detection for high-dimensional
 spatial data. [arXiv preprint
 arXiv:2204.02707](https://arxiv.org/abs/2204.02707).
+
+Doser, J. W., Kery, M., Finley, A. O., Saunders, S. P., Weed, A. S.,
+Zipkin, E. F. (2023). Guidelines for the use of spatially-varying
+coefficients in species distribution models. [arXiv preprint
+arXiv:2301.05645](https://arxiv.org/abs/2301.05645).
