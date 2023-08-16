@@ -2,7 +2,7 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
 		    trend = TRUE, psi.RE = list(), p.RE = list(), sp = FALSE, 
 		    svc.cols = 1, cov.model, sigma.sq, phi, nu, ar1 = FALSE, 
                     rho, sigma.sq.t, x.positive = FALSE, mis.spec.type = 'none', 
-		    scale.param = 1, ...) {
+		    scale.param = 1, avail, ...) {
 
   # Check for unused arguments ------------------------------------------
   formal.args <- names(formals(sys.function(sys.parent())))
@@ -11,7 +11,13 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
       if(! i %in% formal.args)
           warning("'",i, "' is not an argument")
   }
-
+  # Subroutines -----------------------------------------------------------
+  rmvn <- function(n, mu=0, V = matrix(1)){
+    p <- length(mu)
+    if(any(is.na(match(dim(V),p)))){stop("Dimension problem!")}
+    D <- chol(V)
+    t(matrix(rnorm(n*p), ncol=p)%*%D + rep(mu,rep(n,p)))
+  }
   # Check function inputs -------------------------------------------------
   # J.x -------------------------------
   if (missing(J.x)) {
@@ -135,6 +141,18 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
   
   if (scale.param <= 0) {
     stop("scale parameter must be greater than zero.")
+  }
+
+  # Availability process --------------------------------------------------
+  if (missing(avail)) {
+    avail <- array(1, dim = c(J, max(n.time, na.rm = TRUE), n.rep.max))  
+  } else {
+    if (length(dim(avail)) != 3) {
+      stop(paste0("avail must be an array with dimensions of ", J, " x ", max(n.time), " x ", max(n.rep), "."))
+    }
+    if (dim(avail)[1] != J | dim(avail)[2] != max(n.time) | dim(avail)[3] != max(n.rep)) {
+      stop(paste0("avail must be an array with dimensions of ", J, " x ", max(n.time), " x ", max(n.rep), "."))
+    }
   }
 
   # Subroutines -----------------------------------------------------------
@@ -279,7 +297,7 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
     for (i in 1:p.svc) {
       Sigma <- mkSpCov(coords, as.matrix(sigma.sq[i]), as.matrix(0), theta[i, ], cov.model)
       # Random spatial process
-      w.mat[, i] <- mvrnorm(1, rep(0, J), Sigma)
+      w.mat[, i] <- rmvn(1, rep(0, J), Sigma)
     }
     X.w <- X[, , svc.cols, drop = FALSE]
     w.sites <- matrix(0, J, n.time.max)
@@ -298,7 +316,7 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
     exponent <- abs(matrix(1:n.time.max - 1, nrow = n.time.max, 
 			   ncol = n.time.max, byrow = TRUE) - (1:n.time.max - 1))
     Sigma.eta <- sigma.sq.t * rho^exponent
-    eta <- mvrnorm(1, rep(0, n.time.max), Sigma.eta)
+    eta <- rmvn(1, rep(0, n.time.max), Sigma.eta)
   } else {
     eta <- matrix(rep(0, n.time.max))
   }
@@ -406,8 +424,10 @@ simTOcc <- function(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0
           p[j, t, rep.indx[[j]][[t]]] <- pnorm(X.p[j, t, rep.indx[[j]][[t]], ] %*% as.matrix(alpha))
         }
       }
-      
-      y[j, t, rep.indx[[j]][[t]]] <- rbinom(n.rep[j, t], 1, p[j, t, rep.indx[[j]][[t]]] * z[j, t]) 
+      # Allow for closure to be violated if specified
+      # tmp <- rbinom(n.rep[j, t], 1, avail[j, t, rep.indx[[j]][[t]]]) 
+      # y[j, t, rep.indx[[j]][[t]]] <- rbinom(n.rep[j, t], 1, p[j, t, rep.indx[[j]][[t]]] * tmp * z[j, t]) 
+      y[j, t, rep.indx[[j]][[t]]] <- rbinom(n.rep[j, t], 1, p[j, t, rep.indx[[j]][[t]]] * avail[j, t, rep.indx[[j]][[t]]] * z[j, t]) 
     } # t
   } # j
 

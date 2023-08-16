@@ -77,6 +77,11 @@ sfMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     stop("error: coords must be specified in data for a spatial occupancy model.")
   }
   coords <- as.matrix(data$coords)
+  # Check if all spatial coordinates are unique. 
+  unique.coords <- unique(data$coords)
+  if (nrow(unique.coords) < nrow(data$coords)) {
+    stop("coordinates provided in coords are not all unique. spOccupancy requires each site to have its own unique pair of spatial coordinates. This may be the result of an error in preparing the data list, or you will need to change what you consider a 'site' in order to meet this requirement.") 
+  }
   if (!missing(k.fold)) {
     if (!is.numeric(k.fold) | length(k.fold) != 1 | k.fold < 2) {
       stop("error: k.fold must be a single integer value >= 2")  
@@ -599,6 +604,8 @@ sfMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     phi.a <- rep(3 / max(coords.D), q)
     phi.b <- rep(3 / sort(unique(c(coords.D)))[2], q)
   }
+  # Check if any phi is fixed based on the prior
+  phi.fix <- ifelse(sum(phi.a == phi.b) > 0, TRUE, FALSE)
 
   # nu -----------------------------
   if (cov.model == "matern") {
@@ -1295,9 +1302,13 @@ sfMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         out$rhat$alpha <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$alpha.samples)))), 
         			      autoburnin = FALSE)$psrf[, 2])
+	if (!phi.fix) {
         out$rhat$theta <- gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$theta.samples)))), 
         			      autoburnin = FALSE)$psrf[, 2]
+	} else {
+          out$rhat$theta <- rep(NA, ifelse(cov.model == 'matern', 2 * q, q))
+	}
         lambda.mat <- matrix(lambda.inits, N, q)
         out$rhat$lambda.lower.tri <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
           					       mcmc(t(a$lambda.samples[c(lower.tri(lambda.mat)), ])))), 

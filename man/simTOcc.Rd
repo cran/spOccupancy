@@ -10,7 +10,7 @@
 simTOcc(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0, trend = TRUE, 
         psi.RE = list(), p.RE = list(), sp = FALSE, svc.cols = 1, cov.model, 
         sigma.sq, phi, nu, ar1 = FALSE, rho, sigma.sq.t, x.positive = FALSE, 
-	mis.spec.type = 'none', scale.param = 1, ...)
+	mis.spec.type = 'none', scale.param = 1, avail, ...)
 }
 
 \arguments{
@@ -63,6 +63,8 @@ simTOcc(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0, trend = TR
 
 \item{scale.param}{a positive number between 0 and 1 that indicates the scale parameter for the occupancy portion of the model when \code{mis.spec.type = 'scale'}. When specified, \code{scale.param} corresponds to the scale parameter for the occupancy portion of the model, while the reciprocal of \code{scale.param} is used for the detection portion of the model.}
 
+\item{avail}{a site x primary time period x visit array indicating the availability probability of the species during each survey simulated at the given site/primary time period/visit combination. This can be used to assess impacts of non-constant availability across replicate surveys in simulation studies. Values should fall between 0 and 1. When not specified, availability is set to 1 for all surveys.}
+
 \item{...}{currently no additional arguments}
 }
 
@@ -71,7 +73,7 @@ simTOcc(J.x, J.y, n.time, n.rep, n.rep.max, beta, alpha, sp.only = 0, trend = TR
 }
 
 \references{
-  Stoudt, S., P. de Valpine, and W. Fithian. (In review) Non-parametric identifiability in species distribution and abundance models: why it matters and how to diagnose a lack of fit using simulation.
+  Stoudt, S., P. de Valpine, and W. Fithian. Non-parametric identifiability in species distribution and abundance models: why it matters and how to diagnose a lack of fit using simulation. Journal of Statistical Theory and Practice 17, 39 (2023). https://doi.org/10.1007/s42519-023-00336-5.
 }
 
 \value{

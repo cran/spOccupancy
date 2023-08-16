@@ -3,7 +3,7 @@
 \title{Compute Widely Applicable Information Criterion for spOccupancy Model Objects}
 
 \usage{
-waicOcc(object, ...)
+waicOcc(object, by.sp = FALSE, ...)
 }
 
 \description{
@@ -16,7 +16,12 @@ waicOcc(object, ...)
   \code{spMsPGOcc}, \code{intPGOcc}, \code{spIntPGOcc}, \code{lfJSDM}, 
   \code{sfJSDM}, \code{lfMsPGOcc}, \code{sfMsPGOcc}, \code{tPGOcc}, \code{stPGOcc}, 
   \code{svcPGBinom}, \code{svcPGOcc}, \code{svcTPGBinom}, \code{svcTPGOcc}, or 
-  \code{intMsPGOcc}.}
+  \code{intMsPGOcc}, \code{svcMsPGOcc}, \code{tMsPGOcc}, \code{stMsPGOcc}, 
+  \code{svcTMsPGOcc}.}
+
+  \item{by.sp}{a logical value indicating whether to return a separate WAIC
+               value for each species in a multi-species occupancy model or 
+	       a single value for all species.}
 
 \item{...}{currently no additional arguments}
 
@@ -43,12 +48,10 @@ waicOcc(object, ...)
 }
 
 \value{
-  When \code{object} is of class \code{PGOcc}, \code{spPGOcc}, \code{msPGOcc}, 
-  \code{spMsPGOcc}, \code{lfJSDM}, \code{sfJSDM}, \code{lfMsPGOcc}, \code{sfMsPGOcc},
-  \code{tPGOcc}, \code{stPGOcc}, \code{svcPGBinom}, or \code{svcPGOcc}, 
+  When \code{object} is of class \code{PGOcc}, \code{spPGOcc}, \code{msPGOcc}, \code{spMsPGOcc}, \code{lfJSDM}, \code{sfJSDM}, \code{lfMsPGOcc}, \code{sfMsPGOcc}, \code{tPGOcc}, \code{stPGOcc}, \code{svcPGBinom}, \code{svcPGOcc}, \code{svcTPGOcc}, \code{svcTPGBinom}, \code{svcMsPGOcc}, \code{tMsPGOcc}, \code{stMsPGOcc}, \code{svcTMsPGOcc} 
   returns a vector with three elements corresponding to 
   estimates of the expected log pointwise predictive density (elpd), the 
-  effective number of parameters (pD), and the WAIC. When \code{object} is 
+  effective number of parameters (pD), and the WAIC. When \code{by.sp = TRUE} for multi-species models, object is a data frame with each row corresponding to a different species. When \code{object} is 
   of class \code{intPGOcc} or \code{spIntPGOcc}, returns a data frame with 
   columns elpd, pD, and WAIC, with each row corresponding to the estimated 
   values for each data source in the integrated model.

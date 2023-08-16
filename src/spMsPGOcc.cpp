@@ -143,7 +143,7 @@ extern "C" {
         Rprintf("----------------------------------------\n");
         Rprintf("\tModel description\n");
         Rprintf("----------------------------------------\n");
-        Rprintf("Spatial Multispecies Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites and %i species.\n\n", J, N);
+        Rprintf("Spatial Multi-species Occupancy Model with Polya-Gamma latent\nvariable fit with %i sites and %i species.\n\n", J, N);
         Rprintf("Samples per chain: %i (%i batches of length %i)\n", nSamples, nBatch, batchLength);
         Rprintf("Burn-in: %i \n", nBurn); 
         Rprintf("Thinning Rate: %i \n", nThin); 
@@ -259,41 +259,55 @@ extern "C" {
     // Community level
     SEXP betaCommSamples_r; 
     PROTECT(betaCommSamples_r = allocMatrix(REALSXP, pOcc, nPost)); nProtect++;
+    zeros(REAL(betaCommSamples_r), pOcc * nPost);
     SEXP alphaCommSamples_r;
     PROTECT(alphaCommSamples_r = allocMatrix(REALSXP, pDet, nPost)); nProtect++;
+    zeros(REAL(alphaCommSamples_r), pDet * nPost);
     SEXP tauSqBetaSamples_r; 
     PROTECT(tauSqBetaSamples_r = allocMatrix(REALSXP, pOcc, nPost)); nProtect++; 
+    zeros(REAL(tauSqBetaSamples_r), pOcc * nPost);
     SEXP tauSqAlphaSamples_r; 
     PROTECT(tauSqAlphaSamples_r = allocMatrix(REALSXP, pDet, nPost)); nProtect++; 
+    zeros(REAL(tauSqAlphaSamples_r), pDet * nPost);
     // Species level
     SEXP betaSamples_r;
     PROTECT(betaSamples_r = allocMatrix(REALSXP, pOccN, nPost)); nProtect++;
+    zeros(REAL(betaSamples_r), pOccN * nPost);
     SEXP alphaSamples_r; 
     PROTECT(alphaSamples_r = allocMatrix(REALSXP, pDetN, nPost)); nProtect++;
+    zeros(REAL(alphaSamples_r), pDetN * nPost);
     SEXP zSamples_r; 
     PROTECT(zSamples_r = allocMatrix(REALSXP, JN, nPost)); nProtect++; 
+    zeros(REAL(zSamples_r), JN * nPost);
     SEXP psiSamples_r; 
     PROTECT(psiSamples_r = allocMatrix(REALSXP, JN, nPost)); nProtect++; 
+    zeros(REAL(psiSamples_r), JN * nPost);
     // Spatial parameters
     SEXP wSamples_r; 
     PROTECT(wSamples_r = allocMatrix(REALSXP, JN, nPost)); nProtect++; 
+    zeros(REAL(wSamples_r), JN * nPost);
     // Detection random effects
     SEXP sigmaSqPSamples_r;
     SEXP alphaStarSamples_r;
     if (pDetRE > 0) {
       PROTECT(sigmaSqPSamples_r = allocMatrix(REALSXP, pDetRE, nPost)); nProtect++;
+      zeros(REAL(sigmaSqPSamples_r), pDetRE * nPost);
       PROTECT(alphaStarSamples_r = allocMatrix(REALSXP, nDetREN, nPost)); nProtect++;
+      zeros(REAL(alphaStarSamples_r), nDetREN * nPost);
     }
     // Occurrence random effects
     SEXP sigmaSqPsiSamples_r; 
     SEXP betaStarSamples_r; 
     if (pOccRE > 0) {
       PROTECT(sigmaSqPsiSamples_r = allocMatrix(REALSXP, pOccRE, nPost)); nProtect++;
+      zeros(REAL(sigmaSqPsiSamples_r), pOccRE * nPost);
       PROTECT(betaStarSamples_r = allocMatrix(REALSXP, nOccREN, nPost)); nProtect++;
+      zeros(REAL(betaStarSamples_r), nOccREN * nPost);
     }
     // Likelihood samples for WAIC. 
     SEXP likeSamples_r;
     PROTECT(likeSamples_r = allocMatrix(REALSXP, JN, nPost)); nProtect++;
+    zeros(REAL(likeSamples_r), JN * nPost);
     
     /**********************************************************************
      * Additional Sampler Prep
@@ -331,21 +345,12 @@ extern "C" {
     // Put community level variances in a pOcc x POcc matrix.
     double *TauBetaInv = (double *) R_alloc(ppOcc, sizeof(double)); zeros(TauBetaInv, ppOcc); 
     for (i = 0; i < pOcc; i++) {
-      TauBetaInv[i * pOcc + i] = tauSqBeta[i]; 
+      TauBetaInv[i * pOcc + i] = 1.0 / tauSqBeta[i]; 
     } // i
-    F77_NAME(dpotrf)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-    if(info != 0){error("c++ error: dpotrf TauBetaInv failed\n");}
-    F77_NAME(dpotri)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-    if(info != 0){error("c++ error: dpotri TauBetaInv failed\n");}
-    // Put community level variances in a pDet x pDet matrix. 
     double *TauAlphaInv = (double *) R_alloc(ppDet, sizeof(double)); zeros(TauAlphaInv, ppDet); 
     for (i = 0; i < pDet; i++) {
-      TauAlphaInv[i * pDet + i] = tauSqAlpha[i]; 
+      TauAlphaInv[i * pDet + i] = 1.0 / tauSqAlpha[i]; 
     } // i
-    F77_NAME(dpotrf)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
-    if(info != 0){error("c++ error: dpotrf TauAlphaInv failed\n");}
-    F77_NAME(dpotri)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
-    if(info != 0){error("c++ error: dpotri TauAlphaInv failed\n");}
 
     /**********************************************************************
      * Prep for random effects
@@ -432,6 +437,7 @@ extern "C" {
     if(info != 0){error("c++ error: Cholesky inverse failed in initial covariance matrix\n");}
     SEXP thetaSamples_r; 
     PROTECT(thetaSamples_r = allocMatrix(REALSXP, nThetaN, nPost)); nProtect++; 
+    zeros(REAL(thetaSamples_r), nThetaN * nPost);
 
     /**********************************************************************
      Set up stuff for Adaptive MH and other misc
@@ -446,8 +452,10 @@ extern "C" {
     // MCMC info if desired
     SEXP acceptSamples_r; 
     PROTECT(acceptSamples_r = allocMatrix(REALSXP, nThetaN, nBatch)); nProtect++; 
+    zeros(REAL(acceptSamples_r), nThetaN * nBatch);
     SEXP tuningSamples_r; 
     PROTECT(tuningSamples_r = allocMatrix(REALSXP, nThetaN, nBatch)); nProtect++; 
+    zeros(REAL(tuningSamples_r), nThetaN * nBatch);
     double *wTRInv = (double *) R_alloc(J, sizeof(double)); 
 
     GetRNGstate();

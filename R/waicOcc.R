@@ -1,4 +1,4 @@
-waicOcc <- function(object, ...) {
+waicOcc <- function(object, by.sp = FALSE, ...) {
 
   # Check for unused arguments ------------------------------------------
   formal.args <- names(formals(sys.function(sys.parent())))
@@ -19,8 +19,9 @@ waicOcc <- function(object, ...) {
                              'spMsPGOcc', 'intPGOcc', 'spIntPGOcc', 
                              'lfMsPGOcc', 'sfMsPGOcc', 'lfJSDM', 'sfJSDM', 
 			     'tPGOcc', 'stPGOcc', 'svcPGBinom', 'svcPGOcc', 
-			     'svcTPGBinom', 'svcTPGOcc', 'tMsPGOcc', 'intMsPGOcc'))) {
-    stop("error: object must be one of the following classes: PGOcc, spPGOcc, msPGOcc, spMsPGOcc, intPGOcc, spIntPGOcc, lfMsPGOcc, sfMsPGOcc, lfJSDM, sfJSDM, svcPGOcc, tPGOcc, stPGOcc, svcPGBinom, svcPGOcc, svcTPGBinom, svcTPGOcc, tMsPGOcc, intMsPGOcc\n")
+			     'svcTPGBinom', 'svcTPGOcc', 'tMsPGOcc', 'intMsPGOcc', 
+			     'svcMsPGOcc', 'stMsPGOcc', 'svcTMsPGOcc'))) {
+    stop("error: object must be one of the following classes: PGOcc, spPGOcc, msPGOcc, spMsPGOcc, intPGOcc, spIntPGOcc, lfMsPGOcc, sfMsPGOcc, lfJSDM, sfJSDM, svcPGOcc, tPGOcc, stPGOcc, svcPGBinom, svcPGOcc, svcTPGBinom, svcTPGOcc, tMsPGOcc, intMsPGOcc, svcMsPGOcc, stMsPGOcc, svcTMsPGOcc\n")
   }
 
   n.post <- object$n.post * object$n.chains
@@ -28,7 +29,6 @@ waicOcc <- function(object, ...) {
   logit <- function(theta, a = 0, b = 1) {log((theta-a)/(b-theta))}
   logit.inv <- function(z, a = 0, b = 1) {b-(b-a)/(1+exp(z))}
 
-  # if (is(object, c('PGOcc', 'spPGOcc'))) {
   if (class(object) %in% c('PGOcc', 'spPGOcc', 'svcPGBinom', 'svcPGOcc')) {
     elpd <- sum(apply(object$like.samples, 2, function(a) log(mean(a))), na.rm = TRUE)
     pD <- sum(apply(object$like.samples, 2, function(a) var(log(a))), na.rm = TRUE)
@@ -37,21 +37,41 @@ waicOcc <- function(object, ...) {
   }
   if (class(object) %in% c('msPGOcc', 'spMsPGOcc', 'lfMsPGOcc', 
 			   'sfMsPGOcc', 'lfJSDM', 'sfJSDM', 
-			   'tPGOcc', 'stPGOcc', 'svcTPGBinom', 'svcTPGOcc', 'intMsPGOcc')) {
+			   'tPGOcc', 'stPGOcc', 'svcTPGBinom', 'svcTPGOcc', 'intMsPGOcc', 
+			   'svcMsPGOcc')) {
+    if (!by.sp) {
     elpd <- sum(apply(object$like.samples, c(2, 3), function(a) log(mean(a))), na.rm = TRUE)
     pD <- sum(apply(object$like.samples, c(2, 3), function(a) var(log(a))), na.rm = TRUE)
     out <- c(elpd, pD, -2 * (elpd - pD))
     names(out) <- c("elpd", "pD", "WAIC")
+    } else {
+      elpd <- apply(apply(object$like.samples, c(2, 3), function(a) log(mean(a))), 
+                    1, sum, na.rm = TRUE) 
+      pD <- apply(apply(object$like.samples, c(2, 3), function(a) var(log(a))), 
+                  1, sum, na.rm = TRUE)
+      out <- data.frame(elpd = elpd, 
+			pD = pD, 
+			WAIC = -2 * (elpd - pD))
+    }
   }
 
-  if (class(object) %in% c('tMsPGOcc')) {
-    elpd <- sum(apply(object$like.samples, c(2, 3, 4), function(a) log(mean(a))), na.rm = TRUE)
-    pD <- sum(apply(object$like.samples, c(2, 3, 4), function(a) var(log(a))), na.rm = TRUE)
-    out <- c(elpd, pD, -2 * (elpd - pD))
-    names(out) <- c('elpd', 'pD', 'WAIC')
+  if (class(object) %in% c('tMsPGOcc', 'svcTMsPGOcc', 'stMsPGOcc')) {
+    if (!by.sp) {
+      elpd <- sum(apply(object$like.samples, c(2, 3, 4), function(a) log(mean(a))), na.rm = TRUE)
+      pD <- sum(apply(object$like.samples, c(2, 3, 4), function(a) var(log(a))), na.rm = TRUE)
+      out <- c(elpd, pD, -2 * (elpd - pD))
+      names(out) <- c('elpd', 'pD', 'WAIC')
+    } else {
+      elpd <- apply(apply(object$like.samples, c(2, 3, 4), function(a) log(mean(a))), 
+                    1, sum, na.rm = TRUE) 
+      pD <- apply(apply(object$like.samples, c(2, 3, 4), function(a) var(log(a))), 
+                  1, sum, na.rm = TRUE)
+      out <- data.frame(elpd = elpd, 
+			pD = pD, 
+			WAIC = -2 * (elpd - pD))
+    }
   }
 
-  # if (is(object, c('intPGOcc', 'spIntPGOcc'))) {
   if (class(object) %in% c('intPGOcc', 'spIntPGOcc')) {
     X.p <- object$X.p
     y <- object$y
