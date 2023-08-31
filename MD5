@@ -1,6 +1,6 @@
-c9a922e3f0b50faafa1832e3416fbdbe *DESCRIPTION
+f1a83f5eead1834a18dc52e1af902c2c *DESCRIPTION
 a2cdd4ddaa5fefc9f373d24742f46f6a *NAMESPACE
-6b7e06590129e4787a768aa022fe1f7c *NEWS.md
+390aaf130435335b3006ff858b52e6a2 *NEWS.md
 577cb0da78f4a2f39b02d03de134962d *R/PGOcc.R
 b07ab020e3795f7ba02e488da6f6e675 *R/generics.R
 af96e34b185fbb9fc9417a15c425e6e9 *R/getSVCSamples.R
@@ -30,7 +30,7 @@ c99b8a9816212452d5a58621110879a1 *R/simIntOcc.R
 185571f613b7e80930899acc1fb85621 *R/spPGOcc.R
 dae3e82d6a5a198576d5dd02f5121b9a *R/stMsPGOcc.R
 13140a0c59eb37dab554b14041831527 *R/stPGOcc.R
-94c1b0086f491b55e60f9d3a12d4d345 *R/svcMsPGOcc.R
+43355566d396f06bf16d5f90a7e74bcb *R/svcMsPGOcc.R
 4cd3d83adfa6b0d913659f651b47b8b4 *R/svcPGBinom.R
 f2aae16fdc4cec165fcf2c2feeb0cf10 *R/svcPGOcc.R
 6ba71e8b0aa0003ccb8aa37538efac53 *R/svcTMsPGOcc.R
@@ -153,7 +153,7 @@ e7c7e9f45ce0ddbc6ef98f2e1ac6d870 *man/tMsPGOcc.Rd
 750e4aa22a371dee1eebbbb48d3b8a54 *src/Makevars
 de816868c536592cd9221412bb7a554b *src/PGOcc.cpp
 bbece153faa3eb8ad96be6a6a4971c5c *src/idist.cpp
-f0db8382eee658118ef0def01969497f *src/init.cpp
+f8b47e2c2b9bcfcaaf083dab172321c5 *src/init.cpp
 31af9963616c9a66fa004261d638c84f *src/intMsPGOcc.cpp
 0ffb2dcd5ad6c8f73eaf34337243b773 *src/intPGOcc.cpp
 543e7b5d84ec971475f6d51a0c8fa516 *src/lfJSDM.cpp
@@ -174,7 +174,7 @@ f475845ce80dc2c3c25cd1867eb04f15 *src/spIntPGOcc.cpp
 df3a08cac25e9fb97cb81657b95ffe12 *src/spMsPGOccNNGP.cpp
 802405e26fd980fb9fa222e2e61a830a *src/spMsPGOccNNGPPredict.cpp
 c9ef7ae2b55a343cab7fcbcd71e1c5dd *src/spMsPGOccPredict.cpp
-88e3e1aad40133e7e4ea94fdadae23e9 *src/spOccupancy.h
+33d7a5f7667377f9c7031b10c3c7a4db *src/spOccupancy.h
 c7973a2bfc8153e9fb27481aa1a2ff61 *src/spPGOcc.cpp
 179b30028126e86eac684d9fdb4ffe45 *src/spPGOccNNGP.cpp
 4bc0ac532468f8080273a3ee1dfe7a91 *src/spPGOccNNGPPredict.cpp
