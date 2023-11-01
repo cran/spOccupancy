@@ -65,15 +65,15 @@ extern "C" {
 		  SEXP consts_r, SEXP nOccRELong_r, SEXP m_r, SEXP nnIndx_r, 
 		  SEXP nnIndxLU_r, SEXP uIndx_r, SEXP uIndxLU_r, SEXP uiIndx_r, 
 		  SEXP betaStarting_r, SEXP betaCommStarting_r, SEXP tauSqBetaStarting_r, 
-		  SEXP phiStarting_r, SEXP lambdaStarting_r, SEXP nuStarting_r, 
+		  SEXP phiStarting_r, SEXP lambdaStarting_r, SEXP sigmaSqStarting_r, SEXP nuStarting_r, 
 		  SEXP sigmaSqPsiStarting_r, SEXP betaStarStarting_r, SEXP wStarting_r,
 		  SEXP betaStarIndx_r, SEXP betaLevelIndx_r, SEXP muBetaComm_r, 
 	          SEXP SigmaBetaComm_r, SEXP tauSqBetaA_r, SEXP tauSqBetaB_r, SEXP phiA_r, 
-		  SEXP phiB_r, SEXP nuA_r, SEXP nuB_r, 
+		  SEXP phiB_r, SEXP sigmaSqA_r, SEXP sigmaSqB_r, SEXP nuA_r, SEXP nuB_r, 
 		  SEXP sigmaSqPsiA_r, SEXP sigmaSqPsiB_r, 
 		  SEXP tuning_r, SEXP covModel_r, SEXP nBatch_r, SEXP batchLength_r, 
 		  SEXP acceptRate_r, SEXP nThreads_r, SEXP verbose_r, SEXP nReport_r, 
-		  SEXP samplesInfo_r, SEXP chainInfo_r, SEXP monitors_r){
+		  SEXP samplesInfo_r, SEXP chainInfo_r, SEXP monitors_r, SEXP rangeInd_r){
    
     /**********************************************************************
      * Initial constants
@@ -95,6 +95,7 @@ extern "C" {
     double *y = REAL(y_r);
     double *X = REAL(X_r);
     double *coords = REAL(coords_r); 
+    double *rangeInd = REAL(rangeInd_r);
     int *XRE = INTEGER(XRE_r);
     int m = INTEGER(m_r)[0]; 
     // Load constants
@@ -104,6 +105,8 @@ extern "C" {
     int pOccRE = INTEGER(consts_r)[3];
     int nOccRE = INTEGER(consts_r)[4];
     int q = INTEGER(consts_r)[5]; 
+    int indBetas = INTEGER(consts_r)[6];
+    int sharedSpatial = INTEGER(consts_r)[7];
     int ppOcc = pOcc * pOcc; 
     double *muBetaComm = REAL(muBetaComm_r); 
     double *SigmaBetaCommInv = (double *) R_alloc(ppOcc, sizeof(double));   
@@ -112,6 +115,8 @@ extern "C" {
     double *tauSqBetaB = REAL(tauSqBetaB_r); 
     double *phiA = REAL(phiA_r); 
     double *phiB = REAL(phiB_r); 
+    double sigmaSqA = REAL(sigmaSqA_r)[0]; 
+    double sigmaSqB = REAL(sigmaSqB_r)[0]; 
     double *nuA = REAL(nuA_r); 
     double *nuB = REAL(nuB_r); 
     double *sigmaSqPsiA = REAL(sigmaSqPsiA_r); 
@@ -180,7 +185,11 @@ extern "C" {
         Rprintf("Number of Chains: %i \n", nChain);
         Rprintf("Total Posterior Samples: %i \n\n", nPost * nChain); 
         Rprintf("Using the %s spatial correlation model.\n\n", corName.c_str());
-        Rprintf("Using %i latent spatial factors.\n", q);
+	if (sharedSpatial == 0) {
+          Rprintf("Using %i latent spatial factors.\n", q);
+	} else {
+          Rprintf("Assuming a common spatial process across species.\n");
+	}
         Rprintf("Using %i nearest neighbors.\n\n", m);
 #ifdef _OPENMP
         Rprintf("Source compiled with OpenMP support and model fit using %i thread(s).\n\n", nThreads);
@@ -259,6 +268,8 @@ extern "C" {
     // Spatial range parameter
     double *phi = (double *) R_alloc(q, sizeof(double)); 
     F77_NAME(dcopy)(&q, REAL(phiStarting_r), &inc, phi, &inc); 
+    // Spatial variance parameter
+    double sigmaSq = REAL(sigmaSqStarting_r)[0];
     // Spatial smoothing parameter for Matern
     double *nu = (double *) R_alloc(q, sizeof(double)); 
     F77_NAME(dcopy)(&q, REAL(nuStarting_r), &inc, nu, &inc); 
@@ -395,12 +406,21 @@ extern "C" {
       sigmaSqIndx = 0; phiIndx = 1; nuIndx = 2; 
     }
     int nThetaq = nTheta * q; 
-    int nThetaqSave = (nTheta - 1) * q;
+    int nThetaqSave = 0;
+    if (sharedSpatial == 1) {
+      nThetaqSave = nTheta * q;
+    } else {
+      nThetaqSave = (nTheta - 1) * q;
+    }
     double *theta = (double *) R_alloc(nThetaq, sizeof(double));
     for (ll = 0; ll < q; ll++) {
       theta[phiIndx * q + ll] = phi[ll];
-      // sigmaSq by default is 1 for spatial factor models. 
-      theta[sigmaSqIndx * q + ll] = 1.0;
+      if (sharedSpatial == 1) {
+        theta[sigmaSqIndx * q + ll] = sigmaSq;
+      } else {
+        // sigmaSq by default is 1 for spatial factor models. 
+        theta[sigmaSqIndx * q + ll] = 1.0;
+      }
       if (corName == "matern") {
         theta[nuIndx * q + ll] = nu[ll]; 
       } 
@@ -473,54 +493,58 @@ extern "C" {
         /********************************************************************
          Update Community level Occupancy Coefficients
          *******************************************************************/
-        /********************************
-         Compute b.beta.comm
-         *******************************/
-        zeros(tmp_pOcc, pOcc); 
-        for (i = 0; i < N; i++) {
-          F77_NAME(dgemv)(ytran, &pOcc, &pOcc, &one, TauBetaInv, &pOcc, &beta[i], &N, &one, tmp_pOcc, &inc FCONE); 
-        } // i
-        for (h = 0; h < pOcc; h++) {
-          tmp_pOcc[h] += SigmaBetaCommInvMuBeta[h];  
-        } // j
+        if (indBetas == 0) {
+          /********************************
+           Compute b.beta.comm
+           *******************************/
+          zeros(tmp_pOcc, pOcc); 
+          for (i = 0; i < N; i++) {
+            F77_NAME(dgemv)(ytran, &pOcc, &pOcc, &one, TauBetaInv, &pOcc, &beta[i], &N, &one, tmp_pOcc, &inc FCONE); 
+          } // i
+          for (h = 0; h < pOcc; h++) {
+            tmp_pOcc[h] += SigmaBetaCommInvMuBeta[h];  
+          } // j
 
-        /********************************
-         Compute A.beta.comm
-         *******************************/
-        for (h = 0; h < ppOcc; h++) {
-          tmp_ppOcc[h] = SigmaBetaCommInv[h] + N * TauBetaInv[h]; 
-        }
-        F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
-        F77_NAME(dpotri)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri ABetaComm failed\n");}
-        // A.beta.inv %*% b.beta
-        // 1 * tmp_ppOcc * tmp_pOcc + 0 * tmp_pOcc2  = tmp_pOcc2
-        F77_NAME(dsymv)(lower, &pOcc, &one, tmp_ppOcc, &pOcc, tmp_pOcc, &inc, &zero, tmp_pOcc2, &inc FCONE);
-        // Computes cholesky of tmp_pp again stored back in tmp_ppOcc. This chol(A.beta.inv)
-        F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
-        // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
-        mvrnorm(betaComm, tmp_pOcc2, tmp_ppOcc, pOcc);
+          /********************************
+           Compute A.beta.comm
+           *******************************/
+          for (h = 0; h < ppOcc; h++) {
+            tmp_ppOcc[h] = SigmaBetaCommInv[h] + N * TauBetaInv[h]; 
+          }
+          F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
+          F77_NAME(dpotri)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri ABetaComm failed\n");}
+          // A.beta.inv %*% b.beta
+          // 1 * tmp_ppOcc * tmp_pOcc + 0 * tmp_pOcc2  = tmp_pOcc2
+          F77_NAME(dsymv)(lower, &pOcc, &one, tmp_ppOcc, &pOcc, tmp_pOcc, &inc, &zero, tmp_pOcc2, &inc FCONE);
+          // Computes cholesky of tmp_pp again stored back in tmp_ppOcc. This chol(A.beta.inv)
+          F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
+          // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
+          mvrnorm(betaComm, tmp_pOcc2, tmp_ppOcc, pOcc);
+	}
         /********************************************************************
          Update Community Occupancy Variance Parameter
         ********************************************************************/
-        for (h = 0; h < pOcc; h++) {
-          tmp_0 = 0.0;  
-          for (i = 0; i < N; i++) {
-            tmp_0 += (beta[h * N + i] - betaComm[h]) * (beta[h * N + i] - betaComm[h]);
+	if (indBetas == 0) {
+          for (h = 0; h < pOcc; h++) {
+            tmp_0 = 0.0;  
+            for (i = 0; i < N; i++) {
+              tmp_0 += (beta[h * N + i] - betaComm[h]) * (beta[h * N + i] - betaComm[h]);
+            } // i
+            tmp_0 *= 0.5;
+            tauSqBeta[h] = rigamma(tauSqBetaA[h] + N / 2.0, tauSqBetaB[h] + tmp_0); 
+          } // h
+          // This is correct, nothing wrong here. 
+          for (h = 0; h < pOcc; h++) {
+            TauBetaInv[h * pOcc + h] = tauSqBeta[h]; 
           } // i
-          tmp_0 *= 0.5;
-          tauSqBeta[h] = rigamma(tauSqBetaA[h] + N / 2.0, tauSqBetaB[h] + tmp_0); 
-        } // h
-        // This is correct, nothing wrong here. 
-        for (h = 0; h < pOcc; h++) {
-          TauBetaInv[h * pOcc + h] = tauSqBeta[h]; 
-        } // i
-        F77_NAME(dpotrf)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf TauBetaInv failed\n");}
-        F77_NAME(dpotri)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri TauBetaInv failed\n");}
+          F77_NAME(dpotrf)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf TauBetaInv failed\n");}
+          F77_NAME(dpotri)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri TauBetaInv failed\n");}
+	}
         /********************************************************************
          *Update Occupancy random effects variance
          *******************************************************************/
@@ -540,23 +564,28 @@ extern "C" {
            *Update Occupancy Auxiliary Variables 
            *******************************************************************/
           for (j = 0; j < J; j++) {
-            omegaOcc[j * N + i] = rpg(1.0, F77_NAME(ddot)(&pOcc, &X[j], &J, &beta[i], &N) + wStar[j * N + i] + betaStarSites[i * J + j]);
+            if (rangeInd[j * N + i] == 1.0) {
+              omegaOcc[j * N + i] = rpg(1.0, F77_NAME(ddot)(&pOcc, &X[i * JpOcc + j], &J, &beta[i], &N) + wStar[j * N + i] + betaStarSites[i * J + j]);
+	    }
           } // j
           /********************************************************************
            *Update Occupancy Regression Coefficients
            *******************************************************************/
           for (j = 0; j < J; j++) {
-            kappaOcc[j * N + i] = y[j * N + i] - 1.0 / 2.0; 
-            tmp_J1[j] = kappaOcc[j * N + i] - omegaOcc[j * N + i] * 
-		        (wStar[j * N + i] + betaStarSites[i * J + j]); 
-	    // For later
-	    yStar[j * N + i] = kappaOcc[j * N + i] / omegaOcc[j * N + i];
+            tmp_J1[j] = 0.0;
+            if (rangeInd[j * N + i] == 1.0) {
+              kappaOcc[j * N + i] = y[j * N + i] - 1.0 / 2.0; 
+              tmp_J1[j] = kappaOcc[j * N + i] - omegaOcc[j * N + i] * 
+	                  (wStar[j * N + i] + betaStarSites[i * J + j]); 
+	      // For later
+	      yStar[j * N + i] = kappaOcc[j * N + i] / omegaOcc[j * N + i];
+	    }
           } // j
           /********************************
            * Compute b.beta
            *******************************/
           // t(X) * tmp_J1 + 0 * tmp_pOcc = tmp_pOcc. 
-          F77_NAME(dgemv)(ytran, &J, &pOcc, &one, X, &J, tmp_J1, &inc, &zero, tmp_pOcc, &inc FCONE); 	 
+          F77_NAME(dgemv)(ytran, &J, &pOcc, &one, &X[i * JpOcc], &J, tmp_J1, &inc, &zero, tmp_pOcc, &inc FCONE); 	 
           // TauBetaInv %*% betaComm + tmp_pOcc = tmp_pOcc
           F77_NAME(dgemv)(ntran, &pOcc, &pOcc, &one, TauBetaInv, &pOcc, betaComm, &inc, &one, tmp_pOcc, &inc FCONE); 
 
@@ -564,14 +593,17 @@ extern "C" {
            * Compute A.beta
            * *****************************/
           // t(X) %*% diag(omegaOcc)
+	  zeros(tmp_JpOcc, JpOcc);
           for(j = 0; j < J; j++){
-            for(h = 0; h < pOcc; h++){
-              tmp_JpOcc[h*J+j] = X[h*J+j]*omegaOcc[j * N + i];
-            }
+            if (rangeInd[j * N + i] == 1.0) {
+              for(h = 0; h < pOcc; h++){
+                tmp_JpOcc[h*J+j] = X[i * JpOcc + h * J + j]*omegaOcc[j * N + i];
+              }
+	    }
           }
           // This finishes off A.beta
           // 1 * X * tmp_JpOcc + 0 * tmp_ppOcc = tmp_ppOcc
-          F77_NAME(dgemm)(ytran, ntran, &pOcc, &pOcc, &J, &one, X, &J, tmp_JpOcc, &J, &zero, tmp_ppOcc, &pOcc FCONE FCONE);
+          F77_NAME(dgemm)(ytran, ntran, &pOcc, &pOcc, &J, &one, &X[i * JpOcc], &J, tmp_JpOcc, &J, &zero, tmp_ppOcc, &pOcc FCONE FCONE);
           for (h = 0; h < ppOcc; h++) {
             tmp_ppOcc[h] += TauBetaInv[h]; 
           } // j
@@ -604,14 +636,16 @@ extern "C" {
 	      // aka information only comes from the sites with any given level 
 	      // of a random effect. 
               for (j = 0; j < J; j++) {
-                if (XRE[betaStarIndx[l] * J + j] == betaLevelIndx[l]) {
-                  tmp_02 = 0.0;
-                  for (ll = 0; ll < pOccRE; ll++) {
-                    tmp_02 += betaStar[i * nOccRE + betaStarLongIndx[ll * J + j]];
-	          } 
-                  tmp_one[0] += kappaOcc[j * N + i] - (F77_NAME(ddot)(&pOcc, &X[j], &J, &beta[i], &N) + tmp_02 - betaStar[i * nOccRE + l] + wStar[j * N + i]) * omegaOcc[j * N + i];
-	          tmp_0 += omegaOcc[j * N + i];
-	        }
+                if (rangeInd[j * N + i] == 1.0) {
+                  if (XRE[betaStarIndx[l] * J + j] == betaLevelIndx[l]) {
+                    tmp_02 = 0.0;
+                    for (ll = 0; ll < pOccRE; ll++) {
+                      tmp_02 += betaStar[i * nOccRE + betaStarLongIndx[ll * J + j]];
+	            } 
+                    tmp_one[0] += kappaOcc[j * N + i] - (F77_NAME(ddot)(&pOcc, &X[i * JpOcc + j], &J, &beta[i], &N) + tmp_02 - betaStar[i * nOccRE + l] + wStar[j * N + i]) * omegaOcc[j * N + i];
+	            tmp_0 += omegaOcc[j * N + i];
+	          }
+		}
               }
               /********************************
                * Compute A.beta.star
@@ -689,8 +723,11 @@ extern "C" {
           if(info != 0){error("c++ error: dpotri var failed\n");}
 
 	  // mu
+	  zeros(tmp_N, N);
 	  for (k = 0; k < N; k++) {
-            tmp_N[k] = (yStar[ii * N + k] - F77_NAME(ddot)(&pOcc, &X[ii], &J, &beta[k], &N) - betaStarSites[k * J + ii]) * omegaOcc[ii * N + k];
+            if (rangeInd[ii * N + k] == 1.0) {
+              tmp_N[k] = (yStar[ii * N + k] - F77_NAME(ddot)(&pOcc, &X[k * JpOcc + ii], &J, &beta[k], &N) - betaStarSites[k * J + ii]) * omegaOcc[ii * N + k];
+	    }
           } // k
 
 	  F77_NAME(dgemv)(ytran, &N, &q, &one, lambda, &N, tmp_N, &inc, &zero, mu, &inc FCONE);
@@ -710,87 +747,116 @@ extern "C" {
         /********************************************************************
          *Update spatial factors (lambda)
          *******************************************************************/
-        for (i = 1; i < N; i++) {
-          zeros(tmp_qq, qq);
-          zeros(tmp_q, q);
-	  zeros(tmp_qq2, qq);
-	  // W' %*% S_beta %*% W
-          for (k = 0; k < q; k++) {
-            for (l = 0; l < q; l++) {
-              for (j = 0; j < J; j++) {
-                tmp_qq[k * q + l] += w[j * q + k] * w[j * q + l] * omegaOcc[j * N + i];
-              } // j
-            } // l
-          } // k
+	if (sharedSpatial == 0) {
+          for (i = 1; i < N; i++) {
+            zeros(tmp_qq, qq);
+            zeros(tmp_q, q);
+	    zeros(tmp_qq2, qq);
+	    // W' %*% S_beta %*% W
+            for (k = 0; k < q; k++) {
+              for (l = 0; l < q; l++) {
+                for (j = 0; j < J; j++) {
+                  tmp_qq[k * q + l] += w[j * q + k] * w[j * q + l] * omegaOcc[j * N + i];
+                } // j
+              } // l
+            } // k
 
 
-          // currDim gives the mean dimension of mu and var. 
-	  if (i < q) {
-            currDim = i;  
-          } else {
-            currDim = q;
-          }
-          /*****************************
-	   *mu
-           *****************************/
-	  // zStar - X %*% beta
-	  for (j = 0; j < J; j++) {
-            tmp_J[j] = yStar[j * N + i] - F77_NAME(ddot)(&pOcc, &X[j], &J, &beta[i], &N) - 
-		       betaStarSites[i * J + j];
-
+            // currDim gives the mean dimension of mu and var. 
 	    if (i < q) {
-              tmp_J[j] -= w[j * q + i];
+              currDim = i;  
+            } else {
+              currDim = q;
             }
-          } // j
+            /*****************************
+	     *mu
+             *****************************/
+	    // zStar - X %*% beta
+	    for (j = 0; j < J; j++) {
+              tmp_J[j] = 0.0;
+              if (rangeInd[j * N + i] == 1.0) {
+                tmp_J[j] = yStar[j * N + i] - F77_NAME(ddot)(&pOcc, &X[i * JpOcc + j], &J, &beta[i], &N) - 
+	                   betaStarSites[i * J + j];
 
-	  // S_beta %*% W' = tmp_Jq
-	  // aka multiply W[j, ] by omegaOcc[j] of the current species you're on. 
-	  for (j = 0, l = 0; j < J; j++) {
-            for (ll = 0; ll < q; ll++, l++) {
-              tmp_Jq[l] = omegaOcc[j * N + i] * w[j * q + ll];  
-            }
-          }
-
-	  // tmp_Jq %*% tmp_J
-	  for (k = 0; k < currDim; k++) {
-            for (j = 0; j < J; j++) {
-              tmp_q[k] += tmp_Jq[j * q + k] * tmp_J[j];
+	        if (i < q) {
+                  tmp_J[j] -= w[j * q + i];
+                }
+	      }
             } // j
-          } // k
 
-          /*****************************
-	   *var
-           *****************************/
-	  // Only get relevant columns of t(W) %*% W
-	  for (k = 0, l = 0; k < currDim; k++) {
-            for (j = 0; j < currDim; j++, l++) {
-              tmp_qq2[l] = tmp_qq[k * q + j];
-	    } // j
-          } // k
+	    // S_beta %*% W' = tmp_Jq
+	    // aka multiply W[j, ] by omegaOcc[j] of the current species you're on. 
+	    for (j = 0, l = 0; j < J; j++) {
+              for (ll = 0; ll < q; ll++, l++) {
+                tmp_Jq[l] = omegaOcc[j * N + i] * w[j * q + ll];  
+              }
+            }
 
-	  // Add 1
-	  for (j = 0; j < currDim; j++) {
-            tmp_qq2[j * currDim + j] += 1.0;  
-          } // j
+	    // tmp_Jq %*% tmp_J
+	    for (k = 0; k < currDim; k++) {
+              for (j = 0; j < J; j++) {
+                tmp_q[k] += tmp_Jq[j * q + k] * tmp_J[j];
+              } // j
+            } // k
 
-          F77_NAME(dpotrf)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
-	  if(info != 0){error("c++ error: dpotrf for spatial factors failed\n");}
-          F77_NAME(dpotri)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
-	  if(info != 0){error("c++ error: dpotri for spatial factors failed\n");}
+            /*****************************
+	     *var
+             *****************************/
+	    // Only get relevant columns of t(W) %*% W
+	    for (k = 0, l = 0; k < currDim; k++) {
+              for (j = 0; j < currDim; j++, l++) {
+                tmp_qq2[l] = tmp_qq[k * q + j];
+	      } // j
+            } // k
 
-          F77_NAME(dsymv)(lower, &currDim, &one, tmp_qq2, &currDim, tmp_q, &inc, &zero, tmp_q2, &inc FCONE);
+	    // Add 1
+	    for (j = 0; j < currDim; j++) {
+              tmp_qq2[j * currDim + j] += 1.0;  
+            } // j
 
-          F77_NAME(dpotrf)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
-	  if(info != 0){error("c++ error: dpotrf for spatial factors 2 failed\n");}
-          
-          mvrnorm(tmp_q, tmp_q2, tmp_qq2, currDim);
-          F77_NAME(dcopy)(&currDim, tmp_q, &inc, &lambda[i], &N);
-        } // i
+            F77_NAME(dpotrf)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
+	    if(info != 0){error("c++ error: dpotrf for spatial factors failed\n");}
+            F77_NAME(dpotri)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
+	    if(info != 0){error("c++ error: dpotri for spatial factors failed\n");}
+
+            F77_NAME(dsymv)(lower, &currDim, &one, tmp_qq2, &currDim, tmp_q, &inc, &zero, tmp_q2, &inc FCONE);
+
+            F77_NAME(dpotrf)(lower, &currDim, tmp_qq2, &currDim, &info FCONE); 
+	    if(info != 0){error("c++ error: dpotrf for spatial factors 2 failed\n");}
+            
+            mvrnorm(tmp_q, tmp_q2, tmp_qq2, currDim);
+            F77_NAME(dcopy)(&currDim, tmp_q, &inc, &lambda[i], &N);
+          } // i
+	}
 
         // Multiply Lambda %*% w[j] to get wStar. 
         for (j = 0; j < J; j++) {
           F77_NAME(dgemv)(ntran, &N, &q, &one, lambda, &N, &w[j*q], &inc, &zero, &wStar[j * N], &inc FCONE);
         } // j
+
+        /********************************************************************
+         *Update sigmaSq
+         *******************************************************************/
+	if (sharedSpatial == 1) {
+          aa = 0.0;
+#ifdef _OPENMP
+#pragma omp parallel for private (e, i, b) reduction(+:aa)
+#endif
+          for (j = 0; j < J; j++){
+            if(nnIndxLU[J+j] > 0){
+              e = 0;
+              for(i = 0; i < nnIndxLU[J+j]; i++){
+                e += B[nnIndxLU[j]+i]*w[nnIndx[nnIndxLU[j]+i]];
+              }
+              b = w[j] - e;
+            }else{
+              b = w[j];
+            }	
+            aa += b*b/F[j];
+          }
+
+	  theta[sigmaSqIndx] = rigamma(sigmaSqA + J / 2.0, sigmaSqB + 0.5 * aa * theta[sigmaSqIndx]); 
+	}
 
         /********************************************************************
          *Update phi (and nu if matern)
@@ -881,8 +947,13 @@ extern "C" {
          *******************************************************************/
         for (i = 0; i < N; i++) {
           for (j = 0; j < J; j++) {
-            psi[j * N + i] = logitInv(F77_NAME(ddot)(&pOcc, &X[j], &J, &beta[i], &N) + wStar[j * N + i] + betaStarSites[i * J + j], zero, one); 
-            z[j * N + i] = rbinom(one, psi[j * N + i]);           
+            if (rangeInd[j * N + i] == 1.0) {
+              psi[j * N + i] = logitInv(F77_NAME(ddot)(&pOcc, &X[i * JpOcc + j], &J, &beta[i], &N) + wStar[j * N + i] + betaStarSites[i * J + j], zero, one); 
+              z[j * N + i] = rbinom(one, psi[j * N + i]);           
+	    } else {
+              psi[j * N + i] = 0.0;
+	      z[j * N + i] = 0.0;
+	    }
 	    if (y[j * N + i] == 1) {
               yWAIC[j * N + i] = psi[j * N + i];
 	    } else {
@@ -919,7 +990,11 @@ extern "C" {
               F77_NAME(dcopy)(&Jq, w, &inc, &REAL(wSamples_r)[sPost*Jq], &inc); 
 	    }
 	    if (monitors[thetaMonitor]) {
-              F77_NAME(dcopy)(&nThetaqSave, &theta[phiIndx * q], &inc, &REAL(thetaSamples_r)[sPost*nThetaqSave], &inc); 
+              if(sharedSpatial == 1) {
+                F77_NAME(dcopy)(&nThetaqSave, theta, &inc, &REAL(thetaSamples_r)[sPost*nThetaqSave], &inc); 
+	      } else {
+                F77_NAME(dcopy)(&nThetaqSave, &theta[phiIndx * q], &inc, &REAL(thetaSamples_r)[sPost*nThetaqSave], &inc); 
+	      }
 	    }
 	    if (pOccRE > 0) {
               if (monitors[sigmaSqPsiMonitor]) {

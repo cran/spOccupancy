@@ -2116,8 +2116,10 @@ predict.lfMsPGOcc <- function(object, X.0, coords.0, ignore.RE = FALSE,
     sp.indx <- rep(1:N, p.occ)
     n.post <- object$n.post * object$n.chains
     beta.samples <- as.matrix(object$beta.samples)
-    lambda.samples <- array(object$lambda.samples, dim = c(n.post, N, q))
-    w.samples <- object$w.samples
+    if (q > 0) {
+      lambda.samples <- array(object$lambda.samples, dim = c(n.post, N, q))
+      w.samples <- object$w.samples
+    }
     if (object$psiRE) {
       p.occ.re <- length(object$re.level.names)
     } else {
@@ -2190,25 +2192,32 @@ predict.lfMsPGOcc <- function(object, X.0, coords.0, ignore.RE = FALSE,
     }
     J.str <- nrow(X.0.new)
     # Create new random normal latent factors at unobserved sites. 
-    w.0.samples <- array(rnorm(n.post * q * J.str), dim = c(n.post, q, J.str))
-    w.star.0.samples <- array(NA, dim = c(n.post, N, J.str))
-
-    for (i in 1:n.post) {
-      w.star.0.samples[i, , ] <- matrix(lambda.samples[i, , ], N, q) %*%
-                               matrix(w.0.samples[i, , ], q, J.str)
+    if (q > 0) {
+      w.0.samples <- array(rnorm(n.post * q * J.str), dim = c(n.post, q, J.str))
+      w.star.0.samples <- array(NA, dim = c(n.post, N, J.str))
+      for (i in 1:n.post) {
+        w.star.0.samples[i, , ] <- matrix(lambda.samples[i, , ], N, q) %*%
+                                 matrix(w.0.samples[i, , ], q, J.str)
+      }
     }
+
     out <- list()
     out$psi.0.samples <- array(NA, dim = c(n.post, N, nrow(X.fix)))
     out$z.0.samples <- array(NA, dim = c(n.post, N, nrow(X.fix)))
     # Make predictions
     for (i in 1:N) {
       for (j in 1:J.str) {
-      out$psi.0.samples[, i, j] <- logit.inv(t(as.matrix(X.fix[j, ])) %*% 
-          				   t(beta.samples[, sp.indx == i]) + 
-          				   w.star.0.samples[, i, j] + 
-                                             beta.star.sites.0.samples[, (j - 1) * N + i])
-      out$z.0.samples[, i, j] <- rbinom(n.post, 1, out$psi.0.samples[, i, j])
-    				     
+        if (q > 0) {
+          out$psi.0.samples[, i, j] <- logit.inv(t(as.matrix(X.fix[j, ])) %*% 
+          				         t(beta.samples[, sp.indx == i]) + 
+          				         w.star.0.samples[, i, j] + 
+                                                 beta.star.sites.0.samples[, (j - 1) * N + i])
+	} else {
+          out$psi.0.samples[, i, j] <- logit.inv(t(as.matrix(X.fix[j, ])) %*% 
+          				         t(beta.samples[, sp.indx == i]) + 
+                                                 beta.star.sites.0.samples[, (j - 1) * N + i])
+	}
+        out$z.0.samples[, i, j] <- rbinom(n.post, 1, out$psi.0.samples[, i, j])
       } # j
     } # i
 
@@ -2544,6 +2553,17 @@ predict.sfMsPGOcc <- function(object, X.0, coords.0, n.omp.threads = 1,
     w.samples <- aperm(w.samples, c(2, 3, 1))
     beta.star.sites.0.samples <- t(beta.star.sites.0.samples)
 
+    # Logical indicating whether fitting a shared spatial model
+    if (is(object, 'sfJSDM')) {
+      if (object$shared.spatial) {
+        shared.spatial <- TRUE
+      } else {
+        shared.spatial <- FALSE
+      }
+    } else {
+      shared.spatial <- FALSE
+    }
+
     J.str <- nrow(X.0.new)
 
     if (sp.type == 'GP') {
@@ -2573,12 +2593,13 @@ predict.sfMsPGOcc <- function(object, X.0, coords.0, n.omp.threads = 1,
       storage.mode(n.omp.threads) <- "integer"
       storage.mode(verbose) <- "integer"
       storage.mode(n.report) <- "integer"
+      storage.mode(shared.spatial) <- 'integer'
 
       out <- .Call("sfMsPGOccNNGPPredict", coords, J, N, q, p.occ, n.neighbors,
                    X.fix, coords.0.new, J.str, nn.indx.0, beta.samples,
                    theta.samples, lambda.samples, w.samples, 
           	   beta.star.sites.0.samples, n.post,
-                   cov.model.indx, n.omp.threads, verbose, n.report)
+                   cov.model.indx, n.omp.threads, verbose, n.report, shared.spatial)
 
     }
     out$z.0.samples <- array(out$z.0.samples, dim = c(N, J.str, n.post))
@@ -4683,11 +4704,17 @@ predict.svcTMsPGOcc <- function(object, X.0, coords.0,
       re.level.names <- object$re.level.names
       # Get columns in design matrix with random effects
       x.re.names <- dimnames(object$X.re)[[3]]
+      x.names <- dimnames(object$X)[[3]]
       indx <- which(dimnames(X.0)[[3]] %in% x.re.names)
       X.re <- X.0[, , indx, drop = FALSE]
       X.re <- matrix(X.re, nrow = nrow(X.re) * ncol(X.re),
       	     ncol = dim(X.re)[3])
-      X.fix <- X.0[, , -indx, drop = FALSE]
+      remove.fix.indx <- indx[which(!(dimnames(X.0)[[3]][indx] %in% x.names))]
+      if (length(remove.fix.indx)) {
+        X.fix <- X.0[, , -remove.fix.indx, drop = FALSE]
+      } else {
+        X.fix <- X.0
+      }
       X.fix <- matrix(X.fix, nrow = nrow(X.fix) * ncol(X.fix),
   		      ncol = dim(X.fix)[3])
       n.occ.re <- length(unlist(re.level.names))
@@ -4722,6 +4749,7 @@ predict.svcTMsPGOcc <- function(object, X.0, coords.0,
                 beta.star.sites.0.samples[, (j - 1) * N + i] <-
                   rnorm(n.post, 0, sqrt(object$sigma.sq.psi.samples[, t])) +
                   beta.star.sites.0.samples[, (j - 1) * N + i]
+	  print("here")
               }
             } # j
           } # t
@@ -4749,7 +4777,7 @@ predict.svcTMsPGOcc <- function(object, X.0, coords.0,
     # Desired ordering: iteration, svc, site, factor
     w.samples <- aperm(w.samples, c(2, 3, 4, 1))
     eta.samples <- aperm(eta.samples, c(2, 3, 1))
-    beta.star.sites.0.sampls <- t(beta.star.sites.0.samples)
+    beta.star.sites.0.samples <- t(beta.star.sites.0.samples)
 
     J.str <- nrow(X.fix) / n.years.max
 
