@@ -667,92 +667,95 @@ extern "C" {
         /********************************************************************
          *Update Spatial Random Effects (w)
          *******************************************************************/
-	// Update B and F
+	      // Update B and F
         for (ll = 0; ll < q; ll++) {
           updateBF1JSDM(&B[ll * nIndx], &F[ll*J], &c[ll * m*nThreads], &C[ll * mm * nThreads], coords, nnIndx, nnIndxLU, J, m, theta[sigmaSqIndx * q + ll], theta[phiIndx * q + ll], nu[ll], covModel, &bk[ll * sizeBK], nuB[0]);
         }
 
-	for (ii = 0; ii < J; ii++) {
+	      for (ii = 0; ii < J; ii++) {
           // tmp_qq = lambda' S_beta lambda 
-	  for (i = 0; i < N; i++) {
+          // Note that omegaOcc is fixed at 0 for those species and sites with range.ind == 0
+          // and so the below approach actually works without any issue, because
+          // tmp_Nq for those species will be 0.
+	        for (i = 0; i < N; i++) {
             for (ll = 0; ll < q; ll++) {
               tmp_Nq[ll * N + i] = lambda[ll * N + i] * omegaOcc[ii * N + i];
             } // ll
           } // i
-	  F77_NAME(dgemm)(ytran, ntran, &q, &q, &N, &one, tmp_Nq, &N, lambda, &N, &zero, tmp_qq, &q FCONE FCONE);
+          F77_NAME(dgemm)(ytran, ntran, &q, &q, &N, &one, tmp_Nq, &N, lambda, &N, &zero, tmp_qq, &q FCONE FCONE);
 
-	  for (ll = 0; ll < q; ll++) {
-
+          for (ll = 0; ll < q; ll++) {
             a[ll] = 0; 
-	    v[ll] = 0; 
+            v[ll] = 0; 
 
-	    if (uIndxLU[J + ii] > 0){ // is ii a neighbor for anybody
-	      for (j = 0; j < uIndxLU[J+ii]; j++){ // how many locations have ii as a neighbor
-	        b = 0;
-	        // now the neighbors for the jth location who has ii as a neighbor
-	        jj = uIndx[uIndxLU[ii]+j]; // jj is the index of the jth location who has ii as a neighbor
-	        for(k = 0; k < nnIndxLU[J+jj]; k++){ // these are the neighbors of the jjth location
-	          kk = nnIndx[nnIndxLU[jj]+k]; // kk is the index for the jth locations neighbors
-	          if(kk != ii){ //if the neighbor of jj is not ii
-	    	    b += B[ll*nIndx + nnIndxLU[jj]+k]*w[kk * q + ll]; //covariance between jj and kk and the random effect of kk
-	          }
-	        } // k
-	        aij = w[jj * q + ll] - b;
-	        a[ll] += B[ll*nIndx + nnIndxLU[jj]+uiIndx[uIndxLU[ii]+j]]*aij/F[ll*J + jj];
-	        v[ll] += pow(B[ll * nIndx + nnIndxLU[jj]+uiIndx[uIndxLU[ii]+j]],2)/F[ll * J + jj];
-	      } // j
-	    }
-	    
-	    e = 0;
-	    for(j = 0; j < nnIndxLU[J+ii]; j++){
-	      e += B[ll * nIndx + nnIndxLU[ii]+j]*w[nnIndx[nnIndxLU[ii]+j] * q + ll];
-	    }
+            if (uIndxLU[J + ii] > 0){ // is ii a neighbor for anybody
+              for (j = 0; j < uIndxLU[J+ii]; j++){ // how many locations have ii as a neighbor
+                b = 0;
+                // now the neighbors for the jth location who has ii as a neighbor
+                jj = uIndx[uIndxLU[ii]+j]; // jj is the index of the jth location who has ii as a neighbor
+                for(k = 0; k < nnIndxLU[J+jj]; k++){ // these are the neighbors of the jjth location
+                  kk = nnIndx[nnIndxLU[jj]+k]; // kk is the index for the jth locations neighbors
+                  if(kk != ii){ //if the neighbor of jj is not ii
+            	    b += B[ll*nIndx + nnIndxLU[jj]+k]*w[kk * q + ll]; //covariance between jj and kk and the random effect of kk
+                  }
+                } // k
+                aij = w[jj * q + ll] - b;
+                a[ll] += B[ll*nIndx + nnIndxLU[jj]+uiIndx[uIndxLU[ii]+j]]*aij/F[ll*J + jj];
+                v[ll] += pow(B[ll * nIndx + nnIndxLU[jj]+uiIndx[uIndxLU[ii]+j]],2)/F[ll * J + jj];
+              } // j
+            }
+	      
+            e = 0;
+            for(j = 0; j < nnIndxLU[J+ii]; j++){
+              e += B[ll * nIndx + nnIndxLU[ii]+j]*w[nnIndx[nnIndxLU[ii]+j] * q + ll];
+            }
+  
+            ff[ll] = 1.0 / F[ll * J + ii];
+            gg[ll] = e / F[ll * J + ii];
+          } // ll
 
-	    ff[ll] = 1.0 / F[ll * J + ii];
-	    gg[ll] = e / F[ll * J + ii];
-	  } // ll
-
-	  // var
-	  F77_NAME(dcopy)(&qq, tmp_qq, &inc, var, &inc);
-	  for (k = 0; k < q; k++) {
+	        // var
+	        F77_NAME(dcopy)(&qq, tmp_qq, &inc, var, &inc);
+	        for (k = 0; k < q; k++) {
             var[k * q + k] += ff[k] + v[k]; 
           } // k
-	  F77_NAME(dpotrf)(lower, &q, var, &q, &info FCONE);
+          F77_NAME(dpotrf)(lower, &q, var, &q, &info FCONE);
           if(info != 0){error("c++ error: dpotrf var failed\n");}
-	  F77_NAME(dpotri)(lower, &q, var, &q, &info FCONE);
+          F77_NAME(dpotri)(lower, &q, var, &q, &info FCONE);
           if(info != 0){error("c++ error: dpotri var failed\n");}
 
-	  // mu
-	  zeros(tmp_N, N);
-	  for (k = 0; k < N; k++) {
+          // mu
+          zeros(tmp_N, N);
+          for (k = 0; k < N; k++) {
             if (rangeInd[ii * N + k] == 1.0) {
               tmp_N[k] = (yStar[ii * N + k] - F77_NAME(ddot)(&pOcc, &X[k * JpOcc + ii], &J, &beta[k], &N) - betaStarSites[k * J + ii]) * omegaOcc[ii * N + k];
-	    }
+            }
           } // k
 
-	  F77_NAME(dgemv)(ytran, &N, &q, &one, lambda, &N, tmp_N, &inc, &zero, mu, &inc FCONE);
+          F77_NAME(dgemv)(ytran, &N, &q, &one, lambda, &N, tmp_N, &inc, &zero, mu, &inc FCONE);
 
-	  for (k = 0; k < q; k++) {
+          for (k = 0; k < q; k++) {
             mu[k] += gg[k] + a[k];
-	  } // k
+          } // k
 
-	  F77_NAME(dsymv)(lower, &q, &one, var, &q, mu, &inc, &zero, tmp_N, &inc FCONE);
+	        F77_NAME(dsymv)(lower, &q, &one, var, &q, mu, &inc, &zero, tmp_N, &inc FCONE);
 
-	  F77_NAME(dpotrf)(lower, &q, var, &q, &info FCONE); 
+          F77_NAME(dpotrf)(lower, &q, var, &q, &info FCONE); 
           if(info != 0){error("c++ error: dpotrf var 2 failed\n");}
 
-	  mvrnorm(&w[ii * q], tmp_N, var, q);
-
+          mvrnorm(&w[ii * q], tmp_N, var, q);
         } // ii
         /********************************************************************
          *Update spatial factors (lambda)
          *******************************************************************/
-	if (sharedSpatial == 0) {
+        if (sharedSpatial == 0) {
           for (i = 1; i < N; i++) {
             zeros(tmp_qq, qq);
             zeros(tmp_q, q);
-	    zeros(tmp_qq2, qq);
-	    // W' %*% S_beta %*% W
+            zeros(tmp_qq2, qq);
+	          // W' %*% S_beta %*% W
+	          // Note: the below approach works without needing rangeInd since omegaOcc is 
+	          // 0 at sites/species that it are outside of the range limits.
             for (k = 0; k < q; k++) {
               for (l = 0; l < q; l++) {
                 for (j = 0; j < J; j++) {
@@ -786,6 +789,8 @@ extern "C" {
 
 	    // S_beta %*% W' = tmp_Jq
 	    // aka multiply W[j, ] by omegaOcc[j] of the current species you're on. 
+	    // Note this is fine since omegaOcc is 0 for species and sites that 
+	    // are outside of the range.
 	    for (j = 0, l = 0; j < J; j++) {
               for (ll = 0; ll < q; ll++, l++) {
                 tmp_Jq[l] = omegaOcc[j * N + i] * w[j * q + ll];  

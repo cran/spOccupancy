@@ -142,7 +142,7 @@ intMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         }
       }
     }
-    # TODO: 
+    # TODO: add in detection random effects eventually
     # Detection -----------------------
     # if (!is.null(findbars(det.formula))) {
     #   det.re.names <- sapply(findbars(det.formula), all.vars)
@@ -266,7 +266,7 @@ intMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     n.rep <- lapply(y, function(a1) apply(matrix(a1[1, , ], dim(a1)[2], dim(a1)[3]), 
 					  1, function(a2) sum(!is.na(a2))))
     # Max number of repeat visits for each data set
-    K.long.max <- sapply(n.rep, max)
+    K.long.max <- sapply(y, function(a) dim(a)[3])
     # Number of repeat visits for each data set site. 
     K <- unlist(n.rep)
     if (missing(n.samples)) {
@@ -277,6 +277,10 @@ intMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     }
     if (n.thin > n.samples) {
       stop("error: n.thin must be less than n.samples")
+    }
+    # Check if n.burn, n.thin, and n.samples result in an integer and error if otherwise.
+    if (((n.samples - n.burn) / n.thin) %% 1 != 0) {
+      stop("the number of posterior samples to save ((n.samples - n.burn) / n.thin) is not a whole number. Please respecify the MCMC criteria such that the number of posterior samples saved is a whole number.")
     }
     # Get indices to map z to y --------------------------------------------
     y.big <- y
@@ -950,26 +954,26 @@ intMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         # as.vector removes the "Upper CI" when there is only 1 variable. 
         out$rhat$beta.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$beta.comm.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         out$rhat$alpha.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$alpha.comm.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         out$rhat$tau.sq.beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$tau.sq.beta.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         out$rhat$tau.sq.alpha <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$tau.sq.alpha.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         out$rhat$beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					         mcmc(t(a$beta.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         out$rhat$alpha <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$alpha.samples)))), 
-        			      autoburnin = FALSE)$psrf[, 2])
+        			      autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         if (p.occ.re > 0) {
           out$rhat$sigma.sq.psi <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
           					      mcmc(t(a$sigma.sq.psi.samples)))), 
-          			     autoburnin = FALSE)$psrf[, 2])
+          			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         }
       } else {
         out$rhat$beta.comm <- rep(NA, p.occ)
@@ -1056,7 +1060,7 @@ intMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       out$N <- N
       out$sites <- sites
       out$species <- data$species
-      # TODO: 
+      # TODO: add in detection random effects eventually
       # if (p.det.re > 0) {
       #   out$pRE <- TRUE
       # } else {

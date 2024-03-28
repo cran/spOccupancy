@@ -148,7 +148,7 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
       stop("error: levels must be a tag in psi.RE with the number of random effect levels for each occurrence random intercept.")
     }
   }
-  # TODO: not currently supported.
+  # TODO: detection REs not currently supported.
   # p.RE ----------------------------
   # names(p.RE) <- tolower(names(p.RE))
   # if (!is.list(p.RE)) {
@@ -214,7 +214,7 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
     # Set upper tri to 0
     lambda[upper.tri(lambda)] <- 0
     w <- matrix(NA, n.factors, J)
-    if (sp) { # sfMsPGOcc
+    if (sp) { # sfIntMsPGOcc
       if (cov.model == 'matern') {
         theta <- cbind(phi, nu)
       } else {
@@ -226,7 +226,7 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
         w[ll, ] <- rmvn(1, rep(0, J), Sigma)
       }
 
-    } else { # lsMsPGOcc
+    } else { # lfIntMsPGOcc
       for (ll in 1:n.factors) {
         w[ll, ] <- rnorm(J)
       } # ll  
@@ -235,19 +235,8 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
       w.star[, j] <- lambda %*% w[, j]
     }
   } else {
-    if (sp) { # spMsPGOcc
-      lambda <- NA
-      if (cov.model == 'matern') {
-        theta <- cbind(phi, nu)
-      } else {
-        theta <- as.matrix(phi)
-      }
-      # Spatial random effects for each species
-      for (i in 1:N.max) {
-        Sigma <- mkSpCov(coords, as.matrix(sigma.sq[i]), as.matrix(0), 
-            	     theta[i, ], cov.model)
-	w.star[i, ] <- rmvn(1, rep(0, J), Sigma)
-      }
+    if (sp) { # not supported
+      stop("integrated multi-species spatial occupancy models are only supported for a factor model formulation. Set factor.model = TRUE")
     }
     # For naming consistency
     w <- w.star
@@ -283,7 +272,7 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
     X.re <- NA
     beta.star <- NA
   }
-  # TODO: need to update
+  # TODO: detection REs not currently supported. 
   # Detection (not yet implemented)
   # if (length(p.RE) > 0) {
   #   p.det.re <- length(p.RE$levels)
@@ -353,7 +342,7 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
     for (i in 1:N[t]) {
       for (j in 1:J.obs[t]) {
         # if (length(p.RE) > 0) {
-        #   # TODO: need to update. 
+        #   # TODO: detection REs not currently supported 
         #   p[[t]][i, j, 1:n.rep[[t]][j]] <- logit.inv(X.p[[t]][j, 1:n.rep[[t]][j], ] %*% as.matrix(alpha[[t]][i, ]) + alpha.star.sites[i, j, 1:n.rep[[t]][j]])
         # } else {
           p[[t]][i, j, 1:n.rep[[t]][j]] <- logit.inv(X.p[[t]][j, 1:n.rep[[t]][j], ] %*% as.matrix(alpha[[t]][i, ]))
@@ -380,8 +369,8 @@ simIntMsOcc <- function(n.data, J.x, J.y, J.obs, n.rep, N, beta, alpha, psi.RE =
   coords.obs <- coords[sites.obs,, drop = FALSE]
   coords.pred <- coords[sites.pred,, drop = FALSE]
   if (sp) {
-    w.obs <- w[sites.obs, , drop = FALSE]
-    w.pred <- w[sites.pred, , drop = FALSE]
+    w.obs <- w[, sites.obs, drop = FALSE]
+    w.pred <- w[, sites.pred, drop = FALSE]
   } else {
     w.obs <- NA
     w.pred <- NA

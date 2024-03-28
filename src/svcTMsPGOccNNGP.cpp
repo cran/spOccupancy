@@ -82,7 +82,7 @@ extern "C" {
 		      SEXP tuning_r, SEXP covModel_r, SEXP nBatch_r, SEXP batchLength_r, 
 		      SEXP acceptRate_r, SEXP nThreads_r, SEXP verbose_r, SEXP nReport_r, 
 		      SEXP samplesInfo_r, SEXP chainInfo_r, SEXP ar1Vals_r, SEXP svcBySp_r, 
-		      SEXP varLambda_r){
+		      SEXP varLambda_r, SEXP gridIndx_r){
    
     /**********************************************************************
      * Initial constants
@@ -130,6 +130,9 @@ extern "C" {
     int qpTilde = q * pTilde;
     int nYearsMax = INTEGER(consts_r)[11];
     int ar1 = INTEGER(consts_r)[12];
+    int Jw = INTEGER(consts_r)[13];
+    int indBetas = INTEGER(consts_r)[14];
+    int indAlphas = INTEGER(consts_r)[15];
     int ppDet = pDet * pDet;
     int ppOcc = pOcc * pOcc; 
     int nnYears = nYearsMax * nYearsMax;
@@ -192,6 +195,7 @@ extern "C" {
     int sPost = 0; 
     int *svcBySp = INTEGER(svcBySp_r);
     double *varLambda = REAL(varLambda_r);
+    int *gridIndx = INTEGER(gridIndx_r);
 
 #ifdef _OPENMP
     omp_set_num_threads(nThreads);
@@ -245,6 +249,8 @@ extern "C" {
     int nDetREN = nDetRE * N; 
     int nOccREN = nOccRE * N; 
     int Jq = J * q;
+    int Jwq = Jw * q;
+    int JwN = Jw * N;
     int qq = q * q;
     int JN = J * N;
     int NnYears = nYearsMax * N;
@@ -257,8 +263,8 @@ extern "C" {
     int Nq = N * q;
     int nObspDet = nObs * pDet;
     int nObspDetRE = nObs * pDetRE;
-    int JqpTilde = J * q * pTilde;
-    int JNpTilde = J * N * pTilde;
+    int JwqpTilde = Jw * q * pTilde;
+    int JwNpTilde = Jw * N * pTilde;
     int NqpTilde = N * q * pTilde;
     int jj, kk;
     double tmp_0, tmp_02; 
@@ -294,6 +300,8 @@ extern "C" {
     double *tmp_N2 = (double *) R_alloc(N, sizeof(double));
     double *tmp_NnYears = (double *) R_alloc(NnYears, sizeof(double));
     zeros(tmp_NnYears, NnYears);
+    double *tmp_JNnYears = (double *) R_alloc(JNnYears, sizeof(double));
+    zeros(tmp_JNnYears, JNnYears);
     double *tmp_nObs = (double *) R_alloc(nObs, sizeof(double)); 
     int currDim = 0;
 
@@ -322,7 +330,7 @@ extern "C" {
     double *sigmaSqP = (double *) R_alloc(pDetRE, sizeof(double)); 
     F77_NAME(dcopy)(&pDetRE, REAL(sigmaSqPStarting_r), &inc, sigmaSqP, &inc); 
     // Spatial random effects
-    double *w = (double *) R_alloc(JqpTilde, sizeof(double)); zeros(w, JqpTilde);
+    double *w = (double *) R_alloc(JwqpTilde, sizeof(double)); zeros(w, JwqpTilde);
     // Latent spatial factor loadings 
     double *lambda = (double *) R_alloc(NqpTilde, sizeof(double));
     F77_NAME(dcopy)(&NqpTilde, REAL(lambdaStarting_r), &inc, lambda, &inc);
@@ -396,8 +404,8 @@ extern "C" {
     PROTECT(lambdaSamples_r = allocMatrix(REALSXP, NqpTilde, nPost)); nProtect++;
     zeros(REAL(lambdaSamples_r), NqpTilde * nPost);
     SEXP wSamples_r; 
-    PROTECT(wSamples_r = allocMatrix(REALSXP, JqpTilde, nPost)); nProtect++; 
-    zeros(REAL(wSamples_r), JqpTilde * nPost);
+    PROTECT(wSamples_r = allocMatrix(REALSXP, JwqpTilde, nPost)); nProtect++; 
+    zeros(REAL(wSamples_r), JwqpTilde * nPost);
     // Detection random effects
     SEXP sigmaSqPSamples_r; 
     SEXP alphaStarSamples_r; 
@@ -559,12 +567,13 @@ extern "C" {
     PROTECT(thetaSamples_r = allocMatrix(REALSXP, nThetaqpTildeSave, nPost)); nProtect++; 
     zeros(REAL(thetaSamples_r), nThetaqpTildeSave * nPost);
     // Species-level spatial random effects for each SVC. 
-    double *wStar = (double *) R_alloc(JNpTilde, sizeof(double)); zeros(wStar, JNpTilde);
+    double *wStar = (double *) R_alloc(JwNpTilde, sizeof(double)); zeros(wStar, JwNpTilde);
     // Multiply Lambda %*% w[j] to get wStar for each SVC. 
     for (rr = 0; rr < pTilde; rr++) {
-      for (j = 0; j < J; j++) {
-        F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, &w[rr * Jq + j * q], 
-			&inc, &zero, &wStar[rr * JN + j * N], &inc FCONE);
+      for (j = 0; j < Jw; j++) {
+        F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, 
+			&w[rr * Jwq + j * q], &inc, &zero, 
+			&wStar[rr * JwN + j * N], &inc FCONE);
       } // j
     } // rr
     // For NNGP.
@@ -578,16 +587,16 @@ extern "C" {
 
     // Allocate for the U index vector that keep track of which locations have 
     // the i-th location as a neighbor
-    int nIndx = static_cast<int>(static_cast<double>(1+m)/2*m+(J-m-1)*m);
+    int nIndx = static_cast<int>(static_cast<double>(1+m)/2*m+(Jw-m-1)*m);
 
     // For NNGP. Create a copy of these for each species. Increases storage 
     // space that is needed, but reduces amount of computations. 
     int mm = m*m;
     double *B = (double *) R_alloc(nIndx * q, sizeof(double)); 
-    double *F = (double *) R_alloc(J * q, sizeof(double));
+    double *F = (double *) R_alloc(Jw * q, sizeof(double));
     // Only need one of these. 
     double *BCand = (double *) R_alloc(nIndx, sizeof(double));
-    double *FCand = (double *) R_alloc(J, sizeof(double));
+    double *FCand = (double *) R_alloc(Jw, sizeof(double));
     double *c =(double *) R_alloc(m*nThreads*q, sizeof(double));
     double *C = (double *) R_alloc(mm*nThreads*q, sizeof(double));
     int sizeBK = nThreads*(1.0+static_cast<int>(floor(nuB[0])));
@@ -603,7 +612,7 @@ extern "C" {
         for (j = 0; j < J; j++) {
           wSites[t * JN + j * N + i] = 0.0;
           for (rr = 0; rr < pTilde; rr++) {
-            wSites[t * JN + j * N + i] += wStar[rr * JN + j * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+            wSites[t * JN + j * N + i] += wStar[rr * JwN + gridIndx[j] * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
           } // rr
         } // j
       } // i
@@ -667,103 +676,110 @@ extern "C" {
         /********************************************************************
          Update Community level Occupancy Coefficients
          *******************************************************************/
-        /********************************
-         Compute b.beta.comm
-         *******************************/
-        zeros(tmp_pOcc, pOcc); 
-        for (i = 0; i < N; i++) {
-          F77_NAME(dgemv)(ytran, &pOcc, &pOcc, &one, TauBetaInv, &pOcc, &beta[i], &N, &one, tmp_pOcc, &inc FCONE); 
-        } // i
-        for (h = 0; h < pOcc; h++) {
-          tmp_pOcc[h] += SigmaBetaCommInvMuBeta[h];  
-        } // j
+        if (indBetas == 0) {
+          /********************************
+           Compute b.beta.comm
+           *******************************/
+          zeros(tmp_pOcc, pOcc); 
+          for (i = 0; i < N; i++) {
+            F77_NAME(dgemv)(ytran, &pOcc, &pOcc, &one, TauBetaInv, &pOcc, &beta[i], &N, &one, tmp_pOcc, &inc FCONE); 
+          } // i
+          for (h = 0; h < pOcc; h++) {
+            tmp_pOcc[h] += SigmaBetaCommInvMuBeta[h];  
+          } // j
 
-        /********************************
-         Compute A.beta.comm
-         *******************************/
-        for (h = 0; h < ppOcc; h++) {
-          tmp_ppOcc[h] = SigmaBetaCommInv[h] + N * TauBetaInv[h]; 
-        }
-        F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
-        F77_NAME(dpotri)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri ABetaComm failed\n");}
-        // A.beta.inv %*% b.beta
-        // 1 * tmp_ppOcc * tmp_pOcc + 0 * tmp_pOcc2  = tmp_pOcc2
-        F77_NAME(dsymv)(lower, &pOcc, &one, tmp_ppOcc, &pOcc, tmp_pOcc, &inc, &zero, tmp_pOcc2, &inc FCONE);
-        // Computes cholesky of tmp_pp again stored back in tmp_ppOcc. This chol(A.beta.inv)
-        F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
-        // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
-        mvrnorm(betaComm, tmp_pOcc2, tmp_ppOcc, pOcc);
+          /********************************
+           Compute A.beta.comm
+           *******************************/
+          for (h = 0; h < ppOcc; h++) {
+            tmp_ppOcc[h] = SigmaBetaCommInv[h] + N * TauBetaInv[h]; 
+          }
+          F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
+          F77_NAME(dpotri)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri ABetaComm failed\n");}
+          // A.beta.inv %*% b.beta
+          // 1 * tmp_ppOcc * tmp_pOcc + 0 * tmp_pOcc2  = tmp_pOcc2
+          F77_NAME(dsymv)(lower, &pOcc, &one, tmp_ppOcc, &pOcc, tmp_pOcc, &inc, &zero, tmp_pOcc2, &inc FCONE);
+          // Computes cholesky of tmp_pp again stored back in tmp_ppOcc. This chol(A.beta.inv)
+          F77_NAME(dpotrf)(lower, &pOcc, tmp_ppOcc, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf ABetaComm failed\n");}
+          // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
+          mvrnorm(betaComm, tmp_pOcc2, tmp_ppOcc, pOcc);
+	}
         /********************************************************************
          Update Community level Detection Coefficients
          *******************************************************************/
-        /********************************
-         * Compute b.alpha.comm
-         *******************************/
-         zeros(tmp_pDet, pDet); 
-         for (i = 0; i < N; i++) {
-           F77_NAME(dgemv)(ytran, &pDet, &pDet, &one, TauAlphaInv, &pDet, &alpha[i], &N, &one, tmp_pDet, &inc FCONE); 
-         } // i
-         for (h = 0; h < pDet; h++) {
-           tmp_pDet[h] += SigmaAlphaCommInvMuAlpha[h];  
-         } // j
-        /********************************
-         * Compute A.alpha.comm
-         *******************************/
-        for (h = 0; h < ppDet; h++) {
-          tmp_ppDet[h] = SigmaAlphaCommInv[h] + N * TauAlphaInv[h]; 
-        }
-        F77_NAME(dpotrf)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf AAlphaComm failed\n");}
-        F77_NAME(dpotri)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri AAlphaComm failed\n");}
-        // A.alpha.inv %*% b.alpha
-        // 1 * tmp_ppDet * tmp_pDet + 0 * tmp_pDet2  = tmp_pDet2
-        F77_NAME(dsymv)(lower, &pDet, &one, tmp_ppDet, &pDet, tmp_pDet, &inc, &zero, tmp_pDet2, &inc FCONE);
-        // Computes cholesky of tmp_pp again stored back in tmp_ppDet. This chol(A.alpha.inv)
-        F77_NAME(dpotrf)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf AAlphaComm failed\n");}
-        // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
-        mvrnorm(alphaComm, tmp_pDet2, tmp_ppDet, pDet);
-
+	if (indAlphas == 0) {
+          /********************************
+           * Compute b.alpha.comm
+           *******************************/
+           zeros(tmp_pDet, pDet); 
+           for (i = 0; i < N; i++) {
+             F77_NAME(dgemv)(ytran, &pDet, &pDet, &one, TauAlphaInv, &pDet, &alpha[i], &N, &one, tmp_pDet, &inc FCONE); 
+           } // i
+           for (h = 0; h < pDet; h++) {
+             tmp_pDet[h] += SigmaAlphaCommInvMuAlpha[h];  
+           } // j
+          /********************************
+           * Compute A.alpha.comm
+           *******************************/
+          for (h = 0; h < ppDet; h++) {
+            tmp_ppDet[h] = SigmaAlphaCommInv[h] + N * TauAlphaInv[h]; 
+          }
+          F77_NAME(dpotrf)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf AAlphaComm failed\n");}
+          F77_NAME(dpotri)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri AAlphaComm failed\n");}
+          // A.alpha.inv %*% b.alpha
+          // 1 * tmp_ppDet * tmp_pDet + 0 * tmp_pDet2  = tmp_pDet2
+          F77_NAME(dsymv)(lower, &pDet, &one, tmp_ppDet, &pDet, tmp_pDet, &inc, &zero, tmp_pDet2, &inc FCONE);
+          // Computes cholesky of tmp_pp again stored back in tmp_ppDet. This chol(A.alpha.inv)
+          F77_NAME(dpotrf)(lower, &pDet, tmp_ppDet, &pDet, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf AAlphaComm failed\n");}
+          // Args: destination, mu, cholesky of the inverse covariance matrix, dimension
+          mvrnorm(alphaComm, tmp_pDet2, tmp_ppDet, pDet);
+	}
         /********************************************************************
          Update Community Occupancy Variance Parameter
         ********************************************************************/
-        for (h = 0; h < pOcc; h++) {
-          tmp_0 = 0.0;  
-          for (i = 0; i < N; i++) {
-            tmp_0 += (beta[h * N + i] - betaComm[h]) * (beta[h * N + i] - betaComm[h]);
+	if (indBetas == 0) {
+          for (h = 0; h < pOcc; h++) {
+            tmp_0 = 0.0;  
+            for (i = 0; i < N; i++) {
+              tmp_0 += (beta[h * N + i] - betaComm[h]) * (beta[h * N + i] - betaComm[h]);
+            } // i
+            tmp_0 *= 0.5;
+            tauSqBeta[h] = rigamma(tauSqBetaA[h] + N / 2.0, tauSqBetaB[h] + tmp_0); 
+          } // h
+          for (h = 0; h < pOcc; h++) {
+            TauBetaInv[h * pOcc + h] = tauSqBeta[h]; 
           } // i
-          tmp_0 *= 0.5;
-          tauSqBeta[h] = rigamma(tauSqBetaA[h] + N / 2.0, tauSqBetaB[h] + tmp_0); 
-        } // h
-        for (h = 0; h < pOcc; h++) {
-          TauBetaInv[h * pOcc + h] = tauSqBeta[h]; 
-        } // i
-        F77_NAME(dpotrf)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf TauBetaInv failed\n");}
-        F77_NAME(dpotri)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri TauBetaInv failed\n");}
+          F77_NAME(dpotrf)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf TauBetaInv failed\n");}
+          F77_NAME(dpotri)(lower, &pOcc, TauBetaInv, &pOcc, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri TauBetaInv failed\n");}
+	}
         /********************************************************************
          Update Community Detection Variance Parameter
         ********************************************************************/
-        for (h = 0; h < pDet; h++) {
-          tmp_0 = 0.0;  
-          for (i = 0; i < N; i++) {
-            tmp_0 += (alpha[h * N + i] - alphaComm[h]) * (alpha[h * N + i] - alphaComm[h]);
+	if (indAlphas == 0) {
+          for (h = 0; h < pDet; h++) {
+            tmp_0 = 0.0;  
+            for (i = 0; i < N; i++) {
+              tmp_0 += (alpha[h * N + i] - alphaComm[h]) * (alpha[h * N + i] - alphaComm[h]);
+            } // i
+            tmp_0 *= 0.5;
+            tauSqAlpha[h] = rigamma(tauSqAlphaA[h] + N / 2.0, tauSqAlphaB[h] + tmp_0); 
+          } // h
+          for (h = 0; h < pDet; h++) {
+            TauAlphaInv[h * pDet + h] = tauSqAlpha[h]; 
           } // i
-          tmp_0 *= 0.5;
-          tauSqAlpha[h] = rigamma(tauSqAlphaA[h] + N / 2.0, tauSqAlphaB[h] + tmp_0); 
-        } // h
-        for (h = 0; h < pDet; h++) {
-          TauAlphaInv[h * pDet + h] = tauSqAlpha[h]; 
-        } // i
-        F77_NAME(dpotrf)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
-        if(info != 0){error("c++ error: dpotrf TauAlphaInv failed\n");}
-        F77_NAME(dpotri)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
-        if(info != 0){error("c++ error: dpotri TauAlphaInv failed\n");}
+          F77_NAME(dpotrf)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
+          if(info != 0){error("c++ error: dpotrf TauAlphaInv failed\n");}
+          F77_NAME(dpotri)(lower, &pDet, TauAlphaInv, &pDet, &info FCONE); 
+          if(info != 0){error("c++ error: dpotri TauAlphaInv failed\n");}
+	}
 
         /********************************************************************
          *Update Occupancy random effects variance
@@ -1167,7 +1183,6 @@ extern "C" {
         /********************************************************************
          *Update Spatial Random Effects (w)
          *******************************************************************/
-
         for (rr = 0; rr < pTilde; rr++) { // svc
 
 	  for (ll = 0; ll < q; ll++) {
@@ -1175,65 +1190,69 @@ extern "C" {
             if (corName == "matern"){ 
 	      nu[rr * q + ll] = theta[nuIndx * qpTilde + rr * q + ll];
        	    }
-            updateBFsvcTMs(&B[ll * nIndx], &F[ll * J], &c[ll * m*nThreads], 
-	  		&C[ll * mm * nThreads], coords, nnIndx, nnIndxLU, J, m, 
+            updateBFsvcTMs(&B[ll * nIndx], &F[ll * Jw], &c[ll * m*nThreads], 
+	  		&C[ll * mm * nThreads], coords, nnIndx, nnIndxLU, Jw, m, 
 	  		theta[sigmaSqIndx * qpTilde + rr * q + ll], 
 	  		theta[phiIndx * qpTilde + rr * q + ll], nu[rr * q + ll], 
 	  	        covModel, &bk[ll * sizeBK], nuB[rr * q + ll]);
 	  } // ll
 
-	  for (ii = 0; ii < J; ii++) { // site
+	  for (ii = 0; ii < Jw; ii++) { // site
 	    for (ll = 0; ll < q; ll++) { // factor
 
               a[ll] = 0; 
 	      v[ll] = 0; 
 
-	      if (uIndxLU[J + ii] > 0){ // is ii a neighbor for anybody
-	        for (j = 0; j < uIndxLU[J+ii]; j++){ // how many locations have ii as a neighbor
+	      if (uIndxLU[Jw + ii] > 0){ // is ii a neighbor for anybody
+	        for (j = 0; j < uIndxLU[Jw+ii]; j++){ // how many locations have ii as a neighbor
 	          b = 0;
 	          // now the neighbors for the jth location who has ii as a neighbor
 	          jj = uIndx[uIndxLU[ii]+j]; // jj is the index of the jth location who has ii as a neighbor
-	          for(k = 0; k < nnIndxLU[J+jj]; k++){ // these are the neighbors of the jjth location
+	          for(k = 0; k < nnIndxLU[Jw+jj]; k++){ // these are the neighbors of the jjth location
 	            kk = nnIndx[nnIndxLU[jj]+k]; // kk is the index for the jth locations neighbors
 	            if(kk != ii){ //if the neighbor of jj is not ii
-	      	    b += B[ll * nIndx + nnIndxLU[jj]+k] * w[rr * Jq + kk * q + ll]; //covariance between jj and kk and the random effect of kk
+	      	    b += B[ll * nIndx + nnIndxLU[jj]+k] * w[rr * Jwq + kk * q + ll]; //covariance between jj and kk and the random effect of kk
 	            }
 	          } // k
-	          aij = w[rr * Jq + jj * q + ll] - b;
+	          aij = w[rr * Jwq + jj * q + ll] - b;
 	          a[ll] += B[ll * nIndx + nnIndxLU[jj] + uiIndx[uIndxLU[ii] + j]] * 
-	        	   aij / F[ll * J + jj];
+	        	   aij / F[ll * Jw + jj];
 	          v[ll] += pow(B[ll * nIndx + nnIndxLU[jj] + uiIndx[uIndxLU[ii] + j]], 2) / 
-	        	   F[ll * J + jj];
+	        	   F[ll * Jw + jj];
 	        } // j
 	      }
 	      
 	      e = 0;
-	      for(j = 0; j < nnIndxLU[J+ii]; j++){
+	      for(j = 0; j < nnIndxLU[Jw+ii]; j++){
 	        e += B[ll * nIndx + nnIndxLU[ii] + j] * 
-                     w[rr * Jq + nnIndx[nnIndxLU[ii]+j] * q + ll];
+                     w[rr * Jwq + nnIndx[nnIndxLU[ii]+j] * q + ll];
 	      }
 
-	      ff[ll] = 1.0 / F[ll * J + ii];
-	      gg[ll] = e / F[ll * J + ii];
+	      ff[ll] = 1.0 / F[ll * Jw + ii];
+	      gg[ll] = e / F[ll * Jw + ii];
 	    } // ll (factor)
 
 	    // var
             // tmp_qq = (lambda * Xw)' S_beta (lambda * Xw)
 	    zeros(tmp_qq, qq);
             for (t = 0; t < nYearsMax; t++) {
-              zeros(tmp_Nq2, Nq);
-	      zeros(tmp_Nq, Nq);
-	      for (i = 0; i < N; i++) {
-                for (ll = 0; ll < q; ll++) {
-                  if ((zDatIndx[t * J + ii] == 1) && (rangeInd[ii * N + i] == 1.0)) {
-                    tmp_Nq2[ll * N + i] = lambda[rr * Nq + ll * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + ii];
-                    tmp_Nq[ll * N + i] = tmp_Nq2[ll * N + i] * omegaOcc[t * JN + ii * N + i];
-	          }
-	        } // ll
-              } // i 
-	      F77_NAME(dgemm)(ytran, ntran, &q, &q, &N, &one, tmp_Nq, &N, 
-	          	    tmp_Nq2, &N, &one, tmp_qq, &q FCONE FCONE);
-            } // t
+	      for (j = 0; j < J; j++) {
+                if (gridIndx[j] == ii) {
+                  zeros(tmp_Nq2, Nq);
+	          zeros(tmp_Nq, Nq);
+	          for (i = 0; i < N; i++) {
+                    for (ll = 0; ll < q; ll++) {
+                      if ((zDatIndx[t * J + j] == 1) && (rangeInd[j * N + i] == 1.0)) {
+                        tmp_Nq2[ll * N + i] = lambda[rr * Nq + ll * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+                        tmp_Nq[ll * N + i] = tmp_Nq2[ll * N + i] * omegaOcc[t * JN + j * N + i];
+	              }
+	            } // ll
+                  } // i 
+	          F77_NAME(dgemm)(ytran, ntran, &q, &q, &N, &one, tmp_Nq, &N, 
+	                	 tmp_Nq2, &N, &one, tmp_qq, &q FCONE FCONE);
+                }
+	      } // j
+	    } // t
 	    F77_NAME(dcopy)(&qq, tmp_qq, &inc, var, &inc);
 	    for (ll = 0; ll < q; ll++) {
               var[ll * q + ll] += ff[ll] + v[ll]; 
@@ -1246,35 +1265,44 @@ extern "C" {
 	    // mu
             // //Get Z*Lambda*w for all columns except for the kth column for the current location.
             zeros(tmp_N2, N);
-	    zeros(tmp_NnYears, NnYears);
-            for (rrr = 0; rrr < pTilde; rrr++) {
-              if (rrr != rr) { // if not on the current svc
-                for (i = 0; i < N; i++) {
-                  for (t = 0; t < nYearsMax; t++) {
-                    if ((zDatIndx[t * J + ii] == 1) && (rangeInd[ii * N + i] == 1.0)) {
-                      tmp_NnYears[t * N + i] += wStar[rrr * JN + ii * N + i] * Xw[i * JnYearspTilde + rrr * JnYears + t * J + ii];
+	    zeros(tmp_JNnYears, JNnYears);
+	    for (j = 0; j < J; j++) {
+              if (gridIndx[j] == ii) {
+                for (rrr = 0; rrr < pTilde; rrr++) {
+                  if (rrr != rr) { // if not on the current svc
+                    for (i = 0; i < N; i++) {
+                      for (t = 0; t < nYearsMax; t++) {
+                        if ((zDatIndx[t * J + j] == 1) && (rangeInd[j * N + i] == 1.0)) {
+                          tmp_JNnYears[t * JN + j * N + i] += wStar[rrr * JwN + ii * N + i] * Xw[i * JnYearspTilde + rrr * JnYears + t * J + j];
+	                }
+	              }
 	            }
 	          }
-	        }
+	        } // rrr (svc)
 	      }
-	    } // rrr (svc)
+	    }
 
 	    zeros(mu, q);
             for (t = 0; t < nYearsMax; t++) {
-              zeros(tmp_Nq2, Nq);
-	      zeros(tmp_N, N);
-	      for (i = 0; i < N; i++) {
-                if ((zDatIndx[t * J + ii] == 1) && (rangeInd[ii * N + i] == 1.0)) {
-                  tmp_N[i] = (zStar[t * JN + ii * N + i] - F77_NAME(ddot)(&pOcc, &X[i * JnYearspOcc + t * J + ii], &JnYears, &beta[i], &N) - 
-	          	                    betaStarSites[t * JN + ii * N + i] - 
-					    eta[i * nYearsMax + t] - tmp_NnYears[t * N + i]) * 
-	                      omegaOcc[t * JN + ii * N + i];
-                  for (ll = 0; ll < q; ll++) {
-                    tmp_Nq2[ll * N + i] += lambda[rr * Nq + ll * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + ii];
-	          } // ll
-	        }
-              } // i
-	      F77_NAME(dgemv)(ytran, &N, &q, &one, tmp_Nq2, &N, tmp_N, &inc, &one, mu, &inc FCONE);
+	      for (j = 0; j < J; j++) {
+                if (gridIndx[j] == ii) {
+                  zeros(tmp_Nq2, Nq);
+	          zeros(tmp_N, N);
+	          for (i = 0; i < N; i++) {
+                    if ((zDatIndx[t * J + j] == 1) && (rangeInd[j * N + i] == 1.0)) {
+                      tmp_N[i] = (zStar[t * JN + j * N + i] - F77_NAME(ddot)(&pOcc, &X[i * JnYearspOcc + t * J + j], &JnYears, &beta[i], &N) - 
+	              	                    betaStarSites[t * JN + j * N + i] - 
+	            			    eta[i * nYearsMax + t] - tmp_JNnYears[t * JN + j * N + i]) * 
+	                          omegaOcc[t * JN + j * N + i];
+                      for (ll = 0; ll < q; ll++) {
+                        tmp_Nq2[ll * N + i] += lambda[rr * Nq + ll * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+	              } // ll
+	            }
+                  } // i
+	        F77_NAME(dgemv)(ytran, &N, &q, &one, tmp_Nq2, &N, tmp_N, 
+			      &inc, &one, mu, &inc FCONE);
+		}
+	      } // j
             } // t 
 
 	    for (ll = 0; ll < q; ll++) {
@@ -1286,12 +1314,12 @@ extern "C" {
 	    F77_NAME(dpotrf)(lower, &q, var, &q, &info FCONE); 
             if(info != 0){error("c++ error: dpotrf var 2 failed\n");}
 
-	    mvrnorm(&w[rr * Jq + ii * q], tmp_N, var, q);
+	    mvrnorm(&w[rr * Jwq + ii * q], tmp_N, var, q);
 	  } // ii (site)
           
 	  // Update wStar to make sure updated w values are used in lambda update.  
-          for (j = 0; j < J; j++) {
-            F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, &w[rr * Jq + j * q], &inc, &zero, &wStar[rr * JN + j * N], &inc FCONE);
+          for (j = 0; j < Jw; j++) {
+            F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, &w[rr * Jwq + j * q], &inc, &zero, &wStar[rr * JwN + j * N], &inc FCONE);
           } // j
 
           /********************************************************************
@@ -1309,7 +1337,7 @@ extern "C" {
                   for (t = 0; t < nYearsMax; t++) {
                     tmp_JnYearsq[t * Jq + j * q + ll] = 0.0;
                     if ((zDatIndx[t * J + j] == 1) && (rangeInd[j * N + i] == 1.0)) {
-                      tmp_JnYearsq[t * Jq + j * q + ll] = w[rr * Jq + j * q + ll] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+                      tmp_JnYearsq[t * Jq + j * q + ll] = w[rr * Jwq + gridIndx[j] * q + ll] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
 	            }
 	          } // t (year)
 	        } // j (site)
@@ -1348,14 +1376,14 @@ extern "C" {
                   if ((zDatIndx[t * J + j] == 1) && (rangeInd[j * N + i] == 1.0)) {
                     for (rrr = 0; rrr < pTilde; rrr++) {
                       if (rrr != rr) { // if not on the current svc
-                          tmp_0 += wStar[rrr * JN + j * N + i] * Xw[i * JnYearspTilde + rrr * JnYears + t * J + j];
+                          tmp_0 += wStar[rrr * JwN + gridIndx[j] * N + i] * Xw[i * JnYearspTilde + rrr * JnYears + t * J + j];
 	              }
 	            } // rrr (svc)
                     tmp_JnYears[t * J + j] = zStar[t * JN + j * N + i] - F77_NAME(ddot)(&pOcc, &X[i * JnYearspOcc + t * J + j], &JnYears, &beta[i], &N) - 
 	                                     betaStarSites[t * JN + j * N + i] - tmp_0 - eta[i * nYearsMax + t];
 
 	            if (i < q) {
-                      tmp_JnYears[t * J + j] -= w[rr * Jq + j * q + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+                      tmp_JnYears[t * J + j] -= w[rr * Jwq + gridIndx[j] * q + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
                     }
 	          }
 	        }
@@ -1414,8 +1442,8 @@ extern "C" {
           } // i
 
           // Multiply Lambda %*% w[j] to get wStar.
-          for (j = 0; j < J; j++) {
-            F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, &w[rr * Jq + j * q], &inc, &zero, &wStar[rr * JN + j * N], &inc FCONE);
+          for (j = 0; j < Jw; j++) {
+            F77_NAME(dgemv)(ntran, &N, &q, &one, &lambda[rr * Nq], &N, &w[rr * Jwq + j * q], &inc, &zero, &wStar[rr * JwN + j * N], &inc FCONE);
           } // j
 
           /********************************************************************
@@ -1425,39 +1453,42 @@ extern "C" {
             aa = 0;
             logDet = 0;
 
+	    // If lower and upper bound of uniform prior is the same, don't sample, since phi is fixed at initial value.
+	    if (phiA[rr * q + ll] != phiB[rr * q + ll]) {
+
 #ifdef _OPENMP
 #pragma omp parallel for private (e, ii, b) reduction(+:aa, logDet)
 #endif
-            for (j = 0; j < J; j++){
-              if (nnIndxLU[J+j] > 0){
-                e = 0;
-                for (ii = 0; ii < nnIndxLU[J+j]; ii++){
-                  e += B[ll * nIndx + nnIndxLU[j]+ii]*w[rr * Jq + nnIndx[nnIndxLU[j]+ii] * q + ll];
-                }
-                b = w[rr * Jq + j * q + ll] - e;
-              } else{
-                b = w[rr * Jq + j * q + ll];
-              }	
-              aa += b*b/F[ll * J + j];
-              logDet += log(F[ll * J + j]);
-            }
+              for (j = 0; j < Jw; j++){
+                if (nnIndxLU[Jw+j] > 0){
+                  e = 0;
+                  for (ii = 0; ii < nnIndxLU[Jw+j]; ii++){
+                    e += B[ll * nIndx + nnIndxLU[j]+ii]*w[rr * Jwq + nnIndx[nnIndxLU[j]+ii] * q + ll];
+                  }
+                  b = w[rr * Jwq + j * q + ll] - e;
+                } else{
+                  b = w[rr * Jwq + j * q + ll];
+                }	
+                aa += b*b/F[ll * Jw + j];
+                logDet += log(F[ll * Jw + j]);
+              }
       
-            logPostCurr = -0.5 * logDet - 0.5 * aa;
-            logPostCurr += log(theta[phiIndx * qpTilde + rr * q + ll] - 
-	          	 phiA[rr * q + ll]) + log(phiB[rr * q + ll] - 
-	          	 theta[phiIndx * qpTilde + rr * q + ll]); 
-            if(corName == "matern"){
-       	      logPostCurr += log(theta[nuIndx * qpTilde + rr * q + ll] - nuA[rr * q + ll]) + 
-	                         log(nuB[rr * q + ll] - theta[nuIndx * qpTilde + rr * q + ll]); 
-            }
-            
-            // Candidate
-            phiCand = logitInv(rnorm(logit(theta[phiIndx * qpTilde + rr * q + ll], phiA[rr * q + ll], phiB[rr * q + ll]), exp(tuning[phiIndx * qpTilde + rr * q + ll])), phiA[rr * q + ll], phiB[rr * q + ll]);
-            if (corName == "matern"){
-      	      nuCand = logitInv(rnorm(logit(theta[nuIndx * qpTilde + rr * q + ll], nuA[rr * q + ll], nuB[rr * q + ll]), exp(tuning[nuIndx * qpTilde + rr * q + ll])), nuA[rr * q + ll], nuB[rr * q + ll]);
-            }
+              logPostCurr = -0.5 * logDet - 0.5 * aa;
+              logPostCurr += log(theta[phiIndx * qpTilde + rr * q + ll] - 
+	            	 phiA[rr * q + ll]) + log(phiB[rr * q + ll] - 
+	            	 theta[phiIndx * qpTilde + rr * q + ll]); 
+              if(corName == "matern"){
+       	        logPostCurr += log(theta[nuIndx * qpTilde + rr * q + ll] - nuA[rr * q + ll]) + 
+	                           log(nuB[rr * q + ll] - theta[nuIndx * qpTilde + rr * q + ll]); 
+              }
+              
+              // Candidate
+              phiCand = logitInv(rnorm(logit(theta[phiIndx * qpTilde + rr * q + ll], phiA[rr * q + ll], phiB[rr * q + ll]), exp(tuning[phiIndx * qpTilde + rr * q + ll])), phiA[rr * q + ll], phiB[rr * q + ll]);
+              if (corName == "matern"){
+      	        nuCand = logitInv(rnorm(logit(theta[nuIndx * qpTilde + rr * q + ll], nuA[rr * q + ll], nuB[rr * q + ll]), exp(tuning[nuIndx * qpTilde + rr * q + ll])), nuA[rr * q + ll], nuB[rr * q + ll]);
+              }
       
-            updateBFsvcTMs(BCand, FCand, &c[ll * m*nThreads], &C[ll * mm * nThreads], coords, nnIndx, nnIndxLU, J, m, theta[sigmaSqIndx * qpTilde + rr * q + ll], phiCand, nuCand, covModel, &bk[ll * sizeBK], nuB[rr * q + ll]);
+            updateBFsvcTMs(BCand, FCand, &c[ll * m*nThreads], &C[ll * mm * nThreads], coords, nnIndx, nnIndxLU, Jw, m, theta[sigmaSqIndx * qpTilde + rr * q + ll], phiCand, nuCand, covModel, &bk[ll * sizeBK], nuB[rr * q + ll]);
       
             aa = 0;
             logDet = 0;
@@ -1465,39 +1496,41 @@ extern "C" {
 #ifdef _OPENMP
 #pragma omp parallel for private (e, ii, b) reduction(+:aa, logDet)
 #endif
-            for (j = 0; j < J; j++){
-              if (nnIndxLU[J+j] > 0){
-                e = 0;
-                for (ii = 0; ii < nnIndxLU[J+j]; ii++){
-                  e += BCand[nnIndxLU[j]+ii]*w[rr * Jq + nnIndx[nnIndxLU[j]+ii] * q + ll];
-                }
-                b = w[rr * Jq + j * q + ll] - e;
-              } else{
-                b = w[rr * Jq + j * q + ll];
-                }	
-                aa += b*b/FCand[j];
-                logDet += log(FCand[j]);
-            }
-            
-            logPostCand = -0.5*logDet - 0.5*aa;      
-            logPostCand += log(phiCand - phiA[rr * q + ll]) + log(phiB[rr * q + ll] - phiCand); 
-            if (corName == "matern"){
-              logPostCand += log(nuCand - nuA[rr * q + ll]) + log(nuB[rr * q + ll] - nuCand); 
-            }
-
-            if (runif(0.0,1.0) <= exp(logPostCand - logPostCurr)) {
-
-              F77_NAME(dcopy)(&nIndx, BCand, &inc, &B[ll * nIndx], &inc);
-              F77_NAME(dcopy)(&J, FCand, &inc, &F[ll * J], &inc);
-              
-	      theta[phiIndx * qpTilde + rr * q + ll] = phiCand;
-              accept[phiIndx * qpTilde + rr * q + ll]++;
-              if (corName == "matern") {
-                nu[rr * q + ll] = nuCand; 
-	        theta[nuIndx * qpTilde + rr * q + ll] = nu[rr * q + ll]; 
-                accept[nuIndx * qpTilde + rr * q + ll]++; 
+              for (j = 0; j < Jw; j++){
+                if (nnIndxLU[Jw+j] > 0){
+                  e = 0;
+                  for (ii = 0; ii < nnIndxLU[Jw+j]; ii++){
+                    e += BCand[nnIndxLU[j]+ii]*w[rr * Jwq + nnIndx[nnIndxLU[j]+ii] * q + ll];
+                  }
+                  b = w[rr * Jwq + j * q + ll] - e;
+                } else{
+                  b = w[rr * Jwq + j * q + ll];
+                  }	
+                  aa += b*b/FCand[j];
+                  logDet += log(FCand[j]);
               }
-            }
+              
+              logPostCand = -0.5*logDet - 0.5*aa;      
+              logPostCand += log(phiCand - phiA[rr * q + ll]) + log(phiB[rr * q + ll] - phiCand); 
+              if (corName == "matern"){
+                logPostCand += log(nuCand - nuA[rr * q + ll]) + log(nuB[rr * q + ll] - nuCand); 
+              }
+
+              if (runif(0.0,1.0) <= exp(logPostCand - logPostCurr)) {
+
+                F77_NAME(dcopy)(&nIndx, BCand, &inc, &B[ll * nIndx], &inc);
+                F77_NAME(dcopy)(&Jw, FCand, &inc, &F[ll * Jw], &inc);
+                
+	        theta[phiIndx * qpTilde + rr * q + ll] = phiCand;
+                accept[phiIndx * qpTilde + rr * q + ll]++;
+                if (corName == "matern") {
+                  nu[rr * q + ll] = nuCand; 
+	          theta[nuIndx * qpTilde + rr * q + ll] = nu[rr * q + ll]; 
+                  accept[nuIndx * qpTilde + rr * q + ll]++; 
+                }
+              }
+
+	    }
 	  } // ll (factor)
         } // rr (svc)
 
@@ -1508,7 +1541,7 @@ extern "C" {
               wSites[t * JN + j * N + i] = 0.0;
 	      if (rangeInd[j * N + i] == 1.0) {
                 for (rr = 0; rr < pTilde; rr++) {
-                  wSites[t * JN + j * N + i] += wStar[rr * JN + j * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
+                  wSites[t * JN + j * N + i] += wStar[rr * JwN + gridIndx[j] * N + i] * Xw[i * JnYearspTilde + rr * JnYears + t * J + j];
                 } // rr
               }
             } // j
@@ -1587,7 +1620,7 @@ extern "C" {
             F77_NAME(dcopy)(&NqpTilde, lambda, &inc, &REAL(lambdaSamples_r)[sPost*NqpTilde], &inc); 
             F77_NAME(dcopy)(&JNnYears, psi, &inc, &REAL(psiSamples_r)[sPost*JNnYears], &inc); 
             F77_NAME(dcopy)(&JNnYears, z, &inc, &REAL(zSamples_r)[sPost*JNnYears], &inc); 
-            F77_NAME(dcopy)(&JqpTilde, w, &inc, &REAL(wSamples_r)[sPost*JqpTilde], &inc); 
+            F77_NAME(dcopy)(&JwqpTilde, w, &inc, &REAL(wSamples_r)[sPost*JwqpTilde], &inc); 
             F77_NAME(dcopy)(&nThetaqpTildeSave, &theta[phiIndx * qpTilde], &inc, &REAL(thetaSamples_r)[sPost*nThetaqpTildeSave], &inc); 
             if (ar1) {
               F77_NAME(dcopy)(&nAR1N, ar1Theta, &inc, 

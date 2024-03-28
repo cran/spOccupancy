@@ -211,6 +211,10 @@ sfJSDM <- function(formula, data, inits, priors,
   if (n.thin > n.samples) {
     stop("error: n.thin must be less than n.samples")
   }
+  # Check if n.burn, n.thin, and n.samples result in an integer and error if otherwise.
+  if (((n.samples - n.burn) / n.thin) %% 1 != 0) {
+    stop("the number of posterior samples to save ((n.samples - n.burn) / n.thin) is not a whole number. Please respecify the MCMC criteria such that the number of posterior samples saved is a whole number.")
+  }
   if (!missing(k.fold)) {
     if (!is.numeric(k.fold) | length(k.fold) != 1 | k.fold < 2) {
       stop("error: k.fold must be a single integer value >= 2")  
@@ -972,12 +976,12 @@ sfJSDM <- function(formula, data, inits, priors,
           if (monitors[beta.comm.monitor]) {
             out$rhat$beta.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
             					      mcmc(t(a$beta.comm.samples)))), 
-            			     autoburnin = FALSE)$psrf[, 2])
+            			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
           }
           if (monitors[tau.sq.beta.monitor]) {
             out$rhat$tau.sq.beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
           					      mcmc(t(a$tau.sq.beta.samples)))), 
-          			     autoburnin = FALSE)$psrf[, 2])
+          			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
           }
 	} else {
         out$rhat$beta.comm <- rep(NA, p.occ)
@@ -986,26 +990,26 @@ sfJSDM <- function(formula, data, inits, priors,
         if (monitors[beta.monitor]) {
           out$rhat$beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					         mcmc(t(a$beta.samples)))), 
-        			     autoburnin = FALSE)$psrf[, 2])
+        			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
         }
         if (monitors[theta.monitor]) {
           out$rhat$theta <- gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
         					      mcmc(t(a$theta.samples)))), 
-        			      autoburnin = FALSE)$psrf[, 2]
+        			      autoburnin = FALSE, multivariate = FALSE)$psrf[, 2]
         }
         if (monitors[lambda.monitor]) {
           if (!shared.spatial) {
             lambda.mat <- matrix(lambda.inits, N, q)
             out$rhat$lambda.lower.tri <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
             					       mcmc(t(a$lambda.samples[c(lower.tri(lambda.mat)), ])))), 
-            					       autoburnin = FALSE)$psrf[, 2])
+            					       autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
 	  }
         }
         if (p.occ.re > 0) {
           if (monitors[sigma.sq.psi.monitor]) {
             out$rhat$sigma.sq.psi <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
           					      mcmc(t(a$sigma.sq.psi.samples)))), 
-          			     autoburnin = FALSE)$psrf[, 2])
+          			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
           }
         }
       } else {
@@ -1238,8 +1242,6 @@ sfJSDM <- function(formula, data, inits, priors,
       	      " thread(s).", sep = ''))
       }
       # Currently implemented without parellization. 
-      # TODO: this doesn't work when using the update functionality, but that
-      #       is fine since the update stuff is not shown to user.
       set.seed(k.fold.seed)
       # Number of sites in each hold out data set. 
       sites.random <- sample(1:J)    

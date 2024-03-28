@@ -246,6 +246,10 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   if (n.thin > n.samples) {
     stop("error: n.thin must be less than n.samples")
   }
+  # Check if n.burn, n.thin, and n.samples result in an integer and error if otherwise.
+  if (((n.samples - n.burn) / n.thin) %% 1 != 0) {
+    stop("the number of posterior samples to save ((n.samples - n.burn) / n.thin) is not a whole number. Please respecify the MCMC criteria such that the number of posterior samples saved is a whole number.")
+  }
 
   # Get indices to map z to y -------------------------------------------
   z.site.indx <- rep(1:J, n.years.max) - 1
@@ -303,6 +307,29 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   }
   names(priors) <- tolower(names(priors))
 
+  # Independent beta parameters -----
+  if ('independent.betas' %in% names(priors)) {
+    if (priors$independent.betas == TRUE) {
+      message("beta parameters will be estimated independently\n")
+      ind.betas <- TRUE
+    } else if (priors$independent.betas == FALSE) {
+      ind.betas <- FALSE 
+    }
+  } else {
+    ind.betas <- FALSE
+  }
+  # Independent alpha parameters -----
+  if ('independent.alphas' %in% names(priors)) {
+    if (priors$independent.alphas == TRUE) {
+      message("alpha parameters will be estimated independently\n")
+      ind.alphas <- TRUE
+    } else if (priors$independent.alphas == FALSE) {
+      ind.alphas <- FALSE 
+    }
+  } else {
+    ind.alphas <- FALSE
+  }
+
   # beta.comm -----------------------
   if ("beta.comm.normal" %in% names(priors)) {
     if (!is.list(priors$beta.comm.normal) | length(priors$beta.comm.normal) != 2) {
@@ -336,7 +363,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     }
     Sigma.beta.comm <- sigma.beta.comm * diag(p.occ)
   } else {
-    if (verbose) {
+    if (verbose & !ind.betas) {
       message("No prior specified for beta.comm.normal.\nSetting prior mean to 0 and prior variance to 2.72\n")
     }
     mu.beta.comm <- rep(0, p.occ)
@@ -377,7 +404,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     }
     Sigma.alpha.comm <- sigma.alpha.comm * diag(p.det)
   } else {
-    if (verbose) {
+    if (verbose & !ind.alphas) {
       message("No prior specified for alpha.comm.normal.\nSetting prior mean to 0 and prior variance to 2.72\n")
     }
     mu.alpha.comm <- rep(0, p.det)
@@ -417,7 +444,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       tau.sq.beta.b <- rep(tau.sq.beta.b, p.occ)
     }
   } else {
-    if (verbose) {	    
+    if (verbose & !ind.betas) {	    
       message("No prior specified for tau.sq.beta.ig.\nSetting prior shape to 0.1 and prior scale to 0.1\n")
     }
     tau.sq.beta.a <- rep(0.1, p.occ)
@@ -456,7 +483,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       tau.sq.alpha.b <- rep(tau.sq.alpha.b, p.det)
     }
   } else {
-    if (verbose) {	    
+    if (verbose & !ind.alphas) {	    
       message("No prior specified for tau.sq.alpha.ig.\nSetting prior shape to 0.1 and prior scale to 0.1\n")
     }
     tau.sq.alpha.a <- rep(0.1, p.det)
@@ -933,7 +960,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   storage.mode(z.inits) <- "double"
   storage.mode(X.p) <- "double"
   consts <- c(N, J, n.obs, p.occ, p.occ.re, n.occ.re, 
-      	p.det, p.det.re, n.det.re, n.years.max)
+      	p.det, p.det.re, n.det.re, n.years.max, ind.betas, ind.alphas)
   storage.mode(consts) <- "integer"
   storage.mode(beta.inits) <- "double"
   storage.mode(alpha.inits) <- "double"
@@ -1000,10 +1027,14 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   for (i in 1:n.chains) {
     # Change initial values if i > 1
     if ((i > 1) & (!fix.inits)) {
-      beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
-      alpha.comm.inits <- rnorm(p.det, mu.alpha.comm, sqrt(sigma.alpha.comm))
-      tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
-      tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
+      if (!ind.betas) {
+        beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
+        tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
+      }
+      if (!ind.alphas) {
+        alpha.comm.inits <- rnorm(p.det, mu.alpha.comm, sqrt(sigma.alpha.comm))
+        tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
+      }
       beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
             		     sqrt(tau.sq.beta.inits)), N, p.occ)
       beta.inits <- c(beta.inits)
@@ -1053,36 +1084,36 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     # as.vector removes the "Upper CI" when there is only 1 variable. 
     out$rhat$beta.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					      mcmc(t(a$beta.comm.samples)))), 
-    			     autoburnin = FALSE)$psrf[, 2])
+    			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     out$rhat$alpha.comm <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					      mcmc(t(a$alpha.comm.samples)))), 
-    			     autoburnin = FALSE)$psrf[, 2])
+    			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     out$rhat$tau.sq.beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					      mcmc(t(a$tau.sq.beta.samples)))), 
-    			     autoburnin = FALSE)$psrf[, 2])
+    			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     out$rhat$tau.sq.alpha <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					      mcmc(t(a$tau.sq.alpha.samples)))), 
-    			     autoburnin = FALSE)$psrf[, 2])
+    			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     out$rhat$beta <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					         mcmc(t(a$beta.samples)))), 
-    			     autoburnin = FALSE)$psrf[, 2])
+    			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     out$rhat$alpha <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
     					      mcmc(t(a$alpha.samples)))), 
-    			      autoburnin = FALSE)$psrf[, 2])
+    			      autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     if (ar1) {
       out$rhat$theta <- gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
       					      mcmc(t(a$theta.samples)))), 
-      			      autoburnin = FALSE)$psrf[, 2]
+      			      autoburnin = FALSE, multivariate = FALSE)$psrf[, 2]
     }
     if (p.det.re > 0) {
       out$rhat$sigma.sq.p <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
       					      mcmc(t(a$sigma.sq.p.samples)))), 
-      			     autoburnin = FALSE)$psrf[, 2])
+      			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     }
     if (p.occ.re > 0) {
       out$rhat$sigma.sq.psi <- as.vector(gelman.diag(mcmc.list(lapply(out.tmp, function(a) 
       					      mcmc(t(a$sigma.sq.psi.samples)))), 
-      			     autoburnin = FALSE)$psrf[, 2])
+      			     autoburnin = FALSE, multivariate = FALSE)$psrf[, 2])
     }
   } else {
     out$rhat$beta.comm <- rep(NA, p.occ)

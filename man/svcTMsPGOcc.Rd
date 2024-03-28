@@ -31,7 +31,7 @@ svcTMsPGOcc(occ.formula, det.formula, data, inits, priors, tuning,
 
   \item{data}{a list containing data necessary for model fitting.
     Valid tags are \code{y}, \code{occ.covs}, \code{det.covs}, 
-    \code{coords}, and \code{range.ind}. 
+    \code{coords}, \code{range.ind}, and \code{grid.index}. 
     \code{y} is a four-dimensional array with first dimension equal to the 
     number of species, second dimension equal to the number of sites, third
     dimension equal to the number of primary time periods, and 
@@ -47,9 +47,18 @@ svcTMsPGOcc(occ.formula, det.formula, data, inits, priors, tuning,
     detection covariates can also be observational-level. Observation-level covariates
     are specified as a three-dimensional array with first dimension corresponding to 
     sites, second dimension corresponding to primary time period, and third 
-    dimension corresponding to replicate. \code{coords} is a 
-    \eqn{J \times 2}{J x 2} matrix of the observation coordinates. Note that 
-    \code{spOccupancy} assumes coordinates are specified in a projected coordinate system.
+    dimension corresponding to replicate. \code{coords} is a matrix of the observation coordinates used
+    to estimate the SVCs for each site. \code{coords} has two columns for the 
+    easting and northing coordinate, respectively. Typically, each site in the data 
+    set will have it's own coordinate, such that \code{coords} is a \eqn{J \times 2}{J x 2} 
+    matrix and \code{grid.index} should not be specified. 
+    If you desire to estimate SVCs at some larger spatial level, 
+    e.g., if points fall within grid cells and you want to estimate an SVC for 
+    each grid cell instead of each point, \code{coords} can be specified as the coordinate for 
+    each grid cell. In such a case, \code{grid.index} is an indexing vector of length J, where each 
+    value of \code{grid.index} indicates the corresponding row in \code{coords} that the given 
+    site corresponds to. Note that \code{spOccupancy} assumes coordinates are specified 
+    in a projected coordinate system.
     \code{range.ind} is a matrix with rows corresponding to species and columns
     corresponding to sites, with each element taking value 1 if that site is 
     within the range of the corresponding species and 0 if it is outside of the 
@@ -95,6 +104,14 @@ svcTMsPGOcc(occ.formula, det.formula, data, inits, priors, tuning,
   coefficients to be estimated or a single value if priors are the same for all 
   parameters. If not specified, prior shape and scale 
   parameters are set to 0.1. 
+  If desired, the species-specific occupancy coefficients
+  (\code{beta}) and/or detection coefficients (\code{alpha}) can also be estimated indepdendently by specifying the 
+  tag \code{independent.betas = TRUE} and/or \code{independent.alphas = TRUE}, respectively. 
+If specified, this will not estimate species-specific
+  coefficients as random effects from a common-community-level distribution, and rather
+  the values of \code{beta.comm}/\code{alpha.comm} and \code{tau.sq.beta}/\code{tau.sq.alpha} will be fixed at the 
+  specified initial values. This is equivalent to specifying a Gaussian, independent
+  prior for each of the species-specific effects.
   The spatial factor model fits \code{n.factors} independent
   spatial processes for each spatially-varying coefficient specified in \code{svc.cols}. 
   The spatial decay \code{phi} and smoothness \code{nu} parameters 
@@ -181,7 +198,10 @@ svcTMsPGOcc(occ.formula, det.formula, data, inits, priors, tuning,
     this will result in the covariates being standardized differently for each species
     based on the sites where \code{range.ind == 1} for that given species. If \code{range.ind} is not specified 
     and \code{std.by.sp = TRUE}, this will simply be equivalent to standardizing 
-    the covariates across all locations prior to fitting the model.}
+    the covariates across all locations prior to fitting the model. Note that the covariates
+    in \code{occ.formula} should still be standardized across all locations. This can be done
+    either outside the function, or can be done by specifying \code{scale()} in the model formula 
+    around the continuous covariates.}
 
   \item{n.factors}{the number of factors to use in the spatial factor model approach. 
     Note this corresponds to the number of factors used for each spatially-varying

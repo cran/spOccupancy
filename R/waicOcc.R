@@ -40,9 +40,9 @@ waicOcc <- function(object, by.sp = FALSE, ...) {
 			   'tPGOcc', 'stPGOcc', 'svcTPGBinom', 'svcTPGOcc', 'intMsPGOcc', 
 			   'svcMsPGOcc')) {
     if (!by.sp) {
-    elpd <- sum(apply(object$like.samples, c(2, 3), function(a) log(mean(a))), na.rm = TRUE)
-    pD <- sum(apply(object$like.samples, c(2, 3), function(a) var(log(a))), na.rm = TRUE)
-    out <- c(elpd, pD, -2 * (elpd - pD))
+      elpd <- sum(apply(object$like.samples, c(2, 3), function(a) log(mean(a))), na.rm = TRUE)
+      pD <- sum(apply(object$like.samples, c(2, 3), function(a) var(log(a))), na.rm = TRUE)
+      out <- c(elpd, pD, -2 * (elpd - pD))
     names(out) <- c("elpd", "pD", "WAIC")
     } else {
       elpd <- apply(apply(object$like.samples, c(2, 3), function(a) log(mean(a))), 
@@ -110,8 +110,8 @@ waicOcc <- function(object, by.sp = FALSE, ...) {
         L <- apply(det.prob.samples[, long.indx, drop = FALSE], 1, prod)  * 
                 psi.samples[, curr.sites[j]] + y.ind[[q]][j] * (1 - psi.samples[, curr.sites[j]])
         elpd[q] <- elpd[q] + log(mean(L))
-	if (is.na(elpd[q])) print(j)
-        pD[q] <- pD[q] + var(log(L))
+        if (is.na(elpd[q])) print(j)
+          pD[q] <- pD[q] + var(log(L))
       }
     }
 
