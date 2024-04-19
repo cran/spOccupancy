@@ -1,6 +1,7 @@
+#include <stdlib.h> // for NULL
+#define R_NO_REMAP
 #include <R.h>
 #include <Rinternals.h>
-#include <stdlib.h> // for NULL
 #include <R_ext/Rdynload.h>
 #include "spOccupancy.h"
 

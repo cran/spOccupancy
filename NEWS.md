@@ -1,3 +1,15 @@
+# spOccupancy 0.7.6
+
++ Fixed a memory problem in the saving of the tuning values for `svcTPGOcc` models that required updating v0.7.3 on CRAN to pass valgrind checks, as well as a memory leak in the calculation of the nearest neighbors, and a small problem with the DESCRIPTION file for including on CRAN. 
+
+# spOccupancy 0.7.5
+
++ See v0.7.6
+
+# spOccupancy 0.7.4
+
++ See v0.7.5
+
 # spOccupancy 0.7.3
 
 + Fixed a problem that could arise when calculating Rhat in all models when running multiple chains (but usually only happened in multispecies models) when there was a high amount of correlation between parameter estimates. This would lead to the model running completely, but then failing after all chains have been run. This most often occurred when fitting a multispecies model with a lot of rare species. Thanks to Marc Kery for bringing this to my attention.

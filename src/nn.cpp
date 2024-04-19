@@ -10,6 +10,7 @@
 
 #include "util.h"
 #include "nn.h"
+#define R_NO_REMAP
 #include <R.h>
 #include <Rmath.h>
 #include <Rinternals.h>
@@ -76,7 +77,7 @@ SEXP mkNNIndx(SEXP n_r, SEXP m_r, SEXP coords_r, SEXP nnIndx_r, SEXP nnDist_r, S
   omp_set_num_threads(nThreads);
 #else
   if(nThreads > 1){
-    warning("n.omp.threads > %i, but source not compiled with OpenMP support.", nThreads);
+    Rf_warning("n.omp.threads > %i, but source not compiled with OpenMP support.", nThreads);
     nThreads = 1;
   }
 #endif
@@ -224,15 +225,17 @@ extern "C" {
     omp_set_num_threads(nThreads);
 #else
     if(nThreads > 1){
-      warning("n.omp.threads > %i, but source not compiled with OpenMP support.", nThreads);
+      Rf_warning("n.omp.threads > %i, but source not compiled with OpenMP support.", nThreads);
       nThreads = 1;
     }
 #endif
     
     int i, iNNIndx, iNN;
     
-    int *sIndx = new int[n];
-    double *u = new double[n];
+    // int *sIndx = new int[n];
+    // double *u = new double[n];
+    int *sIndx = (int *) R_alloc(n, sizeof(int));
+    double *u = (double *) R_alloc(n, sizeof(double));
     
     for(i = 0; i < n; i++){
       sIndx[i] = i;
