@@ -11,7 +11,7 @@ Function for fitting integrated multi-species occupancy models using Polya-Gamma
 intMsPGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
            n.omp.threads = 1, verbose = TRUE, n.report = 100, 
            n.burn = round(.10 * n.samples), n.thin = 1, n.chains = 1,
-           k.fold, k.fold.threads = 1, k.fold.seed, k.fold.only = FALSE, ...)
+           ...)
 }
 
 \arguments{
@@ -103,7 +103,8 @@ intMsPGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
 \item{n.samples}{the number of posterior samples to collect in each chain.}
 
 \item{n.omp.threads}{a positive integer indicating the number of threads
-  to use for SMP parallel processing. The package must be compiled for 
+  to use for SMP parallel processing within chains. This will have no impact on 
+  model run times for non-spatial models. The package must be compiled for 
   OpenMP support. For most Intel-based machines, we recommend setting 
   \code{n.omp.threads} up to the number of hypterthreaded cores. Note, 
   \code{n.omp.threads} > 1 might not work on some systems. Currently only 
@@ -124,24 +125,8 @@ intMsPGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
 
 \item{n.chains}{the number of chains to run in sequence.}
 
-\item{k.fold}{cross-validation is not currently supported for integrated 
-  multi-species occupancy models.}
-
-\item{k.fold.threads}{cross-validation is not currently supported for 
-  integrated multi-species occupancy models.} 
-
-\item{k.fold.seed}{cross-validation is not currently supported for integrated
-  multi-species occupancy models.}
-
-\item{k.fold.only}{cross-validation is not currently supported for integrated
-  multi-species occupancy models.} 
-
 \item{...}{currently no additional arguments}
 
-}
-
-\note{
-  Basic functionality of this function is stable, but some components are still in development and not currently available. Please create a GitHub issue on the package GitHub page if you use this function and encounter an error. 
 }
 
 \references{
@@ -317,6 +302,8 @@ inits.list <- list(alpha.comm = list(0, 0),
                    beta = 0)
 
 # Fit the model. 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- intMsPGOcc(occ.formula = ~ occ.cov.1,
                   det.formula = list(f.1 = ~ det.cov.1.1 + det.cov.1.2 + det.cov.1.3,
                                      f.2 = ~ det.cov.2.1 + det.cov.2.2),

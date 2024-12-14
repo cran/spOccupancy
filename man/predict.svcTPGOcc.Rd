@@ -46,7 +46,7 @@
   \item{grid.index.0}{an indexing vector used to specify how each row in \code{X.0} corresponds to the coordinates specified in \code{coords.0}. Only relevant if the spatial random effect was estimated at a higher spatial resolution (e.g., grid cells) than point locations.}
   
   \item{forecast}{a logical value indicating whether prediction is occurring at non-sampled primary time periods (e.g., forecasting).}
-
+  
   \item{...}{currently no additional arguments}
 
 }
@@ -169,6 +169,8 @@ batch.length <- 25
 n.iter <- n.batch * batch.length
 
 # Run the model
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- svcTPGOcc(occ.formula = ~ trend + occ.cov.1, 
                det.formula = ~ det.cov.1 + det.cov.2, 
                data = data.list, 

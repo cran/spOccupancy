@@ -83,7 +83,8 @@ msPGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
 \item{n.samples}{the number of posterior samples to collect in each chain.}
 
 \item{n.omp.threads}{a positive integer indicating the number of threads
-  to use for SMP parallel processing. The package must be compiled for 
+  to use for SMP parallel processing within chains. This will have no impact
+  on model run times for non-spatial models. The package must be compiled for 
   OpenMP support. For most Intel-based machines, we recommend setting 
   \code{n.omp.threads} up to the number of hypterthreaded cores. Note, 
   \code{n.omp.threads} > 1 might not work on some systems. Currently only 
@@ -102,7 +103,7 @@ msPGOcc(occ.formula, det.formula, data, inits, priors, n.samples,
   thinning occurs after the \code{n.burn} samples are discarded. Default 
   value is set to 1.}
 
-\item{n.chains}{the number of chains to run in sequence.}
+\item{n.chains}{the number of chains to run.}
 
 \item{k.fold}{specifies the number of \emph{k} folds for cross-validation. 
   If not specified as an argument, then cross-validation is not performed
@@ -285,6 +286,8 @@ n.samples <- 3000
 n.burn <- 2000
 n.thin <- 1
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- msPGOcc(occ.formula = ~ occ.cov, 
                det.formula = ~ det.cov.1 + det.cov.2, 
                data = data.list, 

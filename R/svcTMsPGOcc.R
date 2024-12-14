@@ -1,12 +1,12 @@
 svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors, 
-		        tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		        n.neighbors = 15, search.type = "cb", 
-			std.by.sp = FALSE, n.factors, svc.by.sp, 
-		        n.batch, batch.length, accept.rate = 0.43,
-		        n.omp.threads = 1, verbose = TRUE, 
-			ar1 = FALSE, n.report = 100, 
-		        n.burn = round(.10 * n.batch * batch.length), 
-		        n.thin = 1, n.chains = 1, ...){
+                        tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
+                        n.neighbors = 15, search.type = "cb", 
+                        std.by.sp = FALSE, n.factors, svc.by.sp, 
+                        n.batch, batch.length, accept.rate = 0.43,
+                        n.omp.threads = 1, verbose = TRUE, 
+                        ar1 = FALSE, n.report = 100, 
+                        n.burn = round(.10 * n.batch * batch.length), 
+                        n.thin = 1, n.chains = 1, ...){
 
   ptm <- proc.time()
 
@@ -369,7 +369,7 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   if (p.det.re == 0) n.det.re.long <- 0
   # Number of repeat visits
   n.rep <- apply(y.big[1, , , , drop = FALSE], c(2, 3), function(a) sum(!is.na(a)))
-  K.max <- max(n.rep)
+  K.max <- dim(y.big)[4]
   # Because I like K better than n.rep
   K <- n.rep
   if (missing(n.batch)) {
@@ -1162,7 +1162,7 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
     beta.star.inits <- rep(beta.star.inits, N)
   } else {
     sigma.sq.psi.inits <- 0
@@ -1194,7 +1194,7 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-    alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+    alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
     alpha.star.inits <- rep(alpha.star.inits, N)
   } else {
     sigma.sq.p.inits <- 0
@@ -1485,16 +1485,16 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (!ind.betas) {
           beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
           tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
-	}
+        }
         if (!ind.alphas) {
           tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
           alpha.comm.inits <- rnorm(p.det, mu.alpha.comm, sqrt(sigma.alpha.comm))
-	}
+        }
         beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-              		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                   sqrt(tau.sq.beta.inits)), N, p.occ)
         beta.inits <- c(beta.inits)
         alpha.inits <- matrix(rnorm(N * p.det, alpha.comm.inits, 
-              		      sqrt(tau.sq.alpha.inits)), N, p.det)
+                                    sqrt(tau.sq.alpha.inits)), N, p.det)
         alpha.inits <- c(alpha.inits)
         phi.inits <- runif(q.p.svc, phi.a, phi.b)
         if (cov.model == 'matern') {
@@ -1502,12 +1502,12 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         }
         if (p.det.re > 0) {
           sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-          alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+          alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
           alpha.star.inits <- rep(alpha.star.inits, N)
         }
         if (p.occ.re > 0) {
           sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-          beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+          beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           beta.star.inits <- rep(beta.star.inits, N)
         }
         if (ar1) {
@@ -1522,25 +1522,25 @@ svcTMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       storage.mode(chain.info) <- "integer"
       # Run the model in C
       out.tmp[[i]] <- .Call("svcTMsPGOccNNGP", y, X.big, X.w.big, X.p, 
-      		      coords, X.re, X.p.re, range.ind, consts, 
-        		    n.occ.re.long, n.det.re.long, 
-        	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
-        	            beta.inits, alpha.inits, z.inits,
-        	            beta.comm.inits, 
-        	            alpha.comm.inits, tau.sq.beta.inits, 
-        	            tau.sq.alpha.inits, phi.inits, 
-        	            lambda.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
-        		    beta.star.inits, alpha.star.inits, z.long.indx, z.year.indx, 
-      		    z.dat.indx, z.site.indx,
-        		    beta.star.indx, beta.level.indx, alpha.star.indx, 
-        		    alpha.level.indx, beta.comm.priors, 
-        	            alpha.comm.priors, tau.sq.beta.priors, 
-			    tau.sq.alpha.priors, phi.priors, nu.priors,  
-        	            sigma.sq.psi.a, sigma.sq.psi.b, 
-        		    sigma.sq.p.a, sigma.sq.p.b, 
-        		    tuning.c, cov.model.indx, n.batch, 
-        	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-        	            samples.info, chain.info, ar1.vals, svc.by.sp, var.lambda, 
+                            coords, X.re, X.p.re, range.ind, consts, 
+                            n.occ.re.long, n.det.re.long, 
+                            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
+                            beta.inits, alpha.inits, z.inits,
+                            beta.comm.inits, 
+                            alpha.comm.inits, tau.sq.beta.inits, 
+                            tau.sq.alpha.inits, phi.inits, 
+                            lambda.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
+                            beta.star.inits, alpha.star.inits, z.long.indx, z.year.indx, 
+                            z.dat.indx, z.site.indx,
+                            beta.star.indx, beta.level.indx, alpha.star.indx, 
+                            alpha.level.indx, beta.comm.priors, 
+                            alpha.comm.priors, tau.sq.beta.priors, 
+                            tau.sq.alpha.priors, phi.priors, nu.priors,  
+                            sigma.sq.psi.a, sigma.sq.psi.b, 
+                            sigma.sq.p.a, sigma.sq.p.b, 
+                            tuning.c, cov.model.indx, n.batch, 
+                            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+                            samples.info, chain.info, ar1.vals, svc.by.sp, var.lambda, 
                             grid.index.c)
       chain.info[1] <- chain.info[1] + 1
     }

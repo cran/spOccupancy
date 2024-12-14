@@ -13,8 +13,10 @@ sfJSDM(formula, data, inits, priors, tuning,
        batch.length, accept.rate = 0.43, n.omp.threads = 1, 
        verbose = TRUE, n.report = 100, 
        n.burn = round(.10 * n.batch * batch.length), n.thin = 1, 
-       n.chains = 1, k.fold, k.fold.threads = 1, k.fold.seed = 100, 
-       k.fold.only = FALSE, monitors, keep.only.mean.95, shared.spatial = FALSE, ...)
+       n.chains = 1, k.fold, 
+       k.fold.threads = 1, k.fold.seed = 100, 
+       k.fold.only = FALSE, monitors, keep.only.mean.95, 
+       shared.spatial = FALSE, ...)
 }
 
 \arguments{
@@ -170,7 +172,7 @@ sfJSDM(formula, data, inits, priors, tuning,
     0.43. See Roberts and Rosenthal (2009) for details.}
   
   \item{n.omp.threads}{a positive integer indicating
-   the number of threads to use for SMP parallel processing. The package must
+   the number of threads to use for SMP parallel processing within chains. The package must
    be compiled for OpenMP support. For most Intel-based machines, we
    recommend setting \code{n.omp.threads} up to the number of
    hyperthreaded cores. Note, \code{n.omp.threads} > 1 might not
@@ -412,6 +414,8 @@ n.batch <- 5
 n.report <- 100
 formula <- ~ 1
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- sfJSDM(formula = formula,
               data = data.list,
               inits = inits.list,

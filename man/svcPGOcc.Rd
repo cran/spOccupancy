@@ -13,8 +13,9 @@ svcPGOcc(occ.formula, det.formula, data, inits, priors,
          batch.length, accept.rate = 0.43, 
          n.omp.threads = 1, verbose = TRUE, n.report = 100, 
          n.burn = round(.10 * n.batch * batch.length), 
-         n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-         k.fold.seed = 100, k.fold.only = FALSE, ...)
+         n.thin = 1, n.chains = 1, 
+         k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+         k.fold.only = FALSE, ...)
 }
 
 \arguments{
@@ -157,7 +158,7 @@ svcPGOcc(occ.formula, det.formula, data, inits, priors,
     0.43. See Roberts and Rosenthal (2009) for details.}
   
   \item{n.omp.threads}{a positive integer indicating
-   the number of threads to use for SMP parallel processing. The package must
+   the number of threads to use for SMP parallel processing within chains. The package must
    be compiled for OpenMP support. For most Intel-based machines, we
    recommend setting \code{n.omp.threads} up to the number of
    hyperthreaded cores. Note, \code{n.omp.threads} > 1 might not
@@ -178,7 +179,7 @@ svcPGOcc(occ.formula, det.formula, data, inits, priors,
     thinning occurs after the \code{n.burn} samples are discarded. Default 
     value is set to 1.}
 
-  \item{n.chains}{the number of MCMC chains to run in sequence.}
+  \item{n.chains}{the number of MCMC chains to run.}
 
   \item{k.fold}{specifies the number of \emph{k} folds for cross-validation. 
     If not specified as an argument, then cross-validation is not performed
@@ -208,6 +209,17 @@ svcPGOcc(occ.formula, det.formula, data, inits, priors,
 }
 
 \references{
+  Doser, J. W., Finley, A. O., Saunders, S. P., Kery, M., Weed, A. S., &
+  Zipkin, E. F. (2024A). Modeling complex species-environment
+  relationships through spatially-varying coefficient occupancy models.
+  Journal of Agricultural, Biological and Environmental Statistics.
+  \doi{10.1007/s13253-023-00595-6}.
+
+  Doser, J. W., Kery, M., Saunders, S. P., Finley, A. O., Bateman, B. L.,
+  Grand, J., Reault, S., Weed, A. S., & Zipkin, E. F. (2024B). Guidelines
+  for the use of spatially varying coefficients in species distribution
+  models. Global Ecology and Biogeography, 33(4), e13814.
+  \doi{10.1111/geb.13814}.
 
   Bates, Douglas, Martin Maechler, Ben Bolker, Steve Walker (2015).
   Fitting Linear Mixed-Effects Models Using lme4. Journal of
@@ -222,10 +234,6 @@ svcPGOcc(occ.formula, det.formula, data, inits, priors,
   S. Banerjee. (2019) Efficient algorithms for Bayesian Nearest Neighbor
   Gaussian Processes. \emph{Journal of Computational and Graphical
     Statistics}, \doi{10.1080/10618600.2018.1537924}.
-
-  Finley, A. O., and  Banerjee, S. (2020). Bayesian spatially varying coefficient 
-  models in the spBayes R package. \emph{Environmental Modelling and Software}, 
-  125, 104608.
 
   Polson, N.G., J.G. Scott, and J. Windle. (2013) Bayesian Inference for
   Logistic Models Using Polya-Gamma Latent Variables. 
@@ -354,6 +362,8 @@ inits.list <- list(alpha = 0, beta = 0,
 # Tuning
 tuning.list <- list(phi = 1) 
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- svcPGOcc(occ.formula = ~ occ.cov, 
                 det.formula = ~ det.cov.1, 
                 data = data.list, 

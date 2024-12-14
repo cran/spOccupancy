@@ -13,21 +13,23 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
            batch.length, accept.rate = 0.43, n.omp.threads = 1, 
            verbose = TRUE, n.report = 100, 
            n.burn = round(.10 * n.batch * batch.length), 
-           n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-           k.fold.seed, k.fold.data, k.fold.only = FALSE, ...)
+           n.thin = 1, n.chains = 1, k.fold, 
+           k.fold.threads = 1, k.fold.seed, k.fold.data, 
+           k.fold.only = FALSE, ...)
 }
 
 \arguments{
 
   \item{occ.formula}{a symbolic description of the model to be fit
   for the occurrence portion of the model using R's model syntax. Only
-  right-hand side of formula is specified. See example below.}
+  right-hand side of formula is specified. See example below. Random 
+  intercepts are allowed using lme4 syntax (Bates et al. 2015).}
 
  \item{det.formula}{a list of symbolic descriptions of the models to be fit
   for the detection portion of the model using R's model syntax for 
   each data set. Each element in the list is a formula for the detection 
   model of a given data set. Only right-hand side of formula is specified. 
-  See example below.}
+  See example below. Random intercepts are allowed using lme4 syntax (Bates et al. 2015).}
  
   \item{data}{a list containing data necessary for model fitting.
   Valid tags are \code{y}, \code{occ.covs}, \code{det.covs}, \code{sites} and \code{coords}. 
@@ -48,12 +50,21 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
   with the number of rows equal to the number of observed sites of that data source
   and number of columns equal to the maximum number of replicates at a given site. 
   \code{coords} is a matrix of the observation site coordinates. Note that \code{spOccupancy} assumes coordinates are specified 
-  in a projected coordinate system.}
+  in a projected coordinate system. \code{sites}
+  is a list of site indices with number of elements equal to the number of data sources being 
+  modeled. Each element contains a vector of length equal to the number of 
+  sites that specific data source contains. Each value in the vector indicates
+  the row in \code{occ.covs} that corresponds with the specific row of the 
+  detection-nondetection data for the data source. This is used to properly link sites across
+  data sets.}
 
   \item{inits}{a list with each tag corresponding to a parameter name.
   Valid tags are \code{z}, \code{beta}, \code{alpha}, \code{sigma.sq}, \code{phi}, 
-  \code{w}, and \code{nu}. The value portion of all tags except \code{alpha} 
-  is the parameter's initial value. The tag \code{alpha} is a list comprised 
+  \code{w}, \code{nu}, \code{sigma.sq.psi}, \code{sigma.sq.p}. 
+  The value portion of all tags except \code{alpha} 
+  is the parameter's initial value. \code{sigma.sq.psi} and \code{sigma.sq.p}
+  are only relevant when including random effects in the occurrence and 
+  detection portion of the occupancy model, respectively. The tag \code{alpha} is a list comprised 
   of the initial values for the detection parameters for each data source. 
   Each element of the list should be a vector of initial values for all detection 
   parameters in the given data source or a single value for each data source to 
@@ -65,8 +76,8 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
   
   \item{priors}{a list with each tag corresponding to a parameter name. 
     Valid tags are \code{beta.normal}, \code{alpha.normal}, \code{phi.unif}, 
-    \code{sigma.sq.ig}, \code{sigma.sq.unif}, and \code{nu.unif}. 
-    Occurrence (\code{beta}) and detection 
+    \code{sigma.sq.ig}, \code{sigma.sq.unif}, \code{nu.unif}, \code{sigma.sq.psi.ig}, 
+    and \code{sigma.sq.p.ig}. Occurrence (\code{beta}) and detection 
     (\code{alpha}) regression coefficients are assumed to follow a normal 
     distribution. For \code{beta} hyperparameters of the normal distribution 
     are passed as a list of length two with the first and second elements 
@@ -77,7 +88,7 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
     and variance hyperparameters are themselves passed in as lists, with each 
     element of the list corresponding to the specific hyperparameters for the 
     detection parameters in a given data source. If not specified, prior means 
-    are set to 0 and prior variances set to 2.73 for normal priors. The 
+    are set to 0 and prior variances set to 2.72 for normal priors. The 
     spatial variance parameter, \code{sigma.sq}, is assumed to follow an 
     inverse-Gamma distribution or a uniform distribution (default is 
     inverse-Gamma). \code{sigma.sq} can also be fixed at its 
@@ -89,7 +100,14 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
     to the \emph{shape} and \emph{scale}, respectively. The hyperparameters
     of the Uniform are also passed as a vector of length two with the first 
     and second elements corresponding to the lower and upper support, 
-    respectively.}
+    respectively. \code{sigma.sq.psi} and 
+    \code{sigma.sq.p} are the random effect variances for any occurrence or 
+    detection random effects, respectively, and are assumed to follow an inverse
+    Gamma distribution. The hyperparameters of the inverse-Gamma distribution
+    are passed as a list of length two with first and second elements corresponding
+    to the shape and scale parameters, respectively, which are each specified as
+    vectors of length equal to the number of random intercepts or of length one 
+    if priors are the same for all random effect variances.}
 
   \item{tuning}{a list with each tag corresponding to a parameter
     name. Valid tags are \code{phi} and \code{nu}. The value portion of each
@@ -135,7 +153,7 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
     0.43. See Roberts and Rosenthal (2009) for details.}
   
   \item{n.omp.threads}{a positive integer indicating
-   the number of threads to use for SMP parallel processing. The package must
+   the number of threads to use for SMP parallel processing within chains. The package must
    be compiled for OpenMP support. For most Intel-based machines, we
    recommend setting \code{n.omp.threads} up to the number of
    hyperthreaded cores. Note, \code{n.omp.threads} > 1 might not
@@ -156,7 +174,7 @@ spIntPGOcc(occ.formula, det.formula, data, inits, priors,
     thinning occurs after the \code{n.burn} samples are discarded. Default 
     value is set to 1.}
 
-  \item{n.chains}{the number of chains to run in sequence.}
+  \item{n.chains}{the number of chains to run.}
 
   \item{k.fold}{specifies the number of \emph{k} folds for cross-validation.
     If not specified as an argument, then cross-validation is not performed
@@ -357,6 +375,8 @@ n.batch <- 2
 # Batch length
 batch.length <- 25
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- spIntPGOcc(occ.formula = ~ occ.cov, 
                   det.formula = list(f.1 = ~ det.cov.1.1, 
                                      f.2 = ~ det.cov.2.1 + det.cov.2.2, 

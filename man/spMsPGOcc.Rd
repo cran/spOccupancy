@@ -147,7 +147,7 @@ spMsPGOcc(occ.formula, det.formula, data, inits, priors, tuning,
     0.43. See Roberts and Rosenthal (2009) for details.}
   
   \item{n.omp.threads}{a positive integer indicating
-   the number of threads to use for SMP parallel processing. The package must
+   the number of threads to use for SMP parallel processing within chains. The package must
    be compiled for OpenMP support. For most Intel-based machines, we
    recommend setting \code{n.omp.threads} up to the number of
    hyperthreaded cores. Note, \code{n.omp.threads} > 1 might not
@@ -385,6 +385,8 @@ inits.list <- list(alpha.comm = 0,
 # Tuning
 tuning.list <- list(phi = 1) 
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- spMsPGOcc(occ.formula = ~ occ.cov, 
                  det.formula = ~ det.cov.1 + det.cov.2, 
                  data = data.list,

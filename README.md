@@ -1,12 +1,12 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# spOccupancy <a href='https://www.jeffdoser.com/files/spoccupancy-web/'><img src="man/figures/logo.png" align="right" height="139" width="120"/></a>
+# spOccupancy <a href='https://doserlab.com/files/spoccupancy-web/'><img src="man/figures/logo.png" align="right" height="139" width="120"/></a>
 
 [![](http://cranlogs.r-pkg.org/badges/grand-total/spOccupancy?color=blue)](https://CRAN.R-project.org/package=spOccupancy)
 [![CRAN](https://www.r-pkg.org/badges/version/spOccupancy)](https://CRAN.R-project.org/package=spOccupancy)
 [![Codecov test
-coverage](https://codecov.io/gh/doserjef/spOccupancy/branch/main/graph/badge.svg)](https://app.codecov.io/gh/doserjef/spOccupancy?branch=main)
+coverage](https://codecov.io/gh/biodiverse/spOccupancy/branch/main/graph/badge.svg)](https://app.codecov.io/gh/biodiverse/spOccupancy?branch=main)
 
 spOccupancy fits single-species, multi-species, and integrated spatial
 occupancy models using Markov chain Monte Carlo (MCMC). Models are fit
@@ -57,6 +57,9 @@ install.packages("spOccupancy")
 | `tMsPGOcc()`           | Multi-species, multi-season occupancy model                               |
 | `stMsPGOcc()`          | Multi-species, multi-season spatial occupancy model                       |
 | `svcTMsPGOcc()`        | Multi-species, multi-season spatially-varying coefficient occupancy model |
+| `tIntPGOcc()`          | Multi-season occupancy model with multiple data sources                   |
+| `stIntPGOcc()`         | Spatial multi-season occupancy model with multiple data sources           |
+| `svcTIntPGOcc()`       | SVC multi-season occupancy model with multiple data sources               |
 | `postHocLM()`          | Fit a linear (mixed) model using estimates from a previous model fit      |
 | `ppcOcc()`             | Posterior predictive check using Bayesian p-values                        |
 | `waicOcc()`            | Compute Widely Applicable Information Criterion (WAIC)                    |
@@ -69,6 +72,7 @@ install.packages("spOccupancy")
 | `simTMsOcc()`          | Simulate multi-species, multi-season occupancy data                       |
 | `simIntOcc()`          | Simulate single-species occupancy data from multiple data sources         |
 | `simIntMsOcc()`        | Simulate multi-species occupancy data from multiple data sources          |
+| `simTIntOcc()`         | Simulate multi-season occupancy data from multiple data sources           |
 
 ## Example usage
 
@@ -109,23 +113,24 @@ btbw.det.formula <- ~ scale(day) + scale(tod) + I(scale(day)^2)
 ```
 
 We run the model using an adaptive MCMC sampler with a target acceptance
-rate of 0.43. We run 3 chains of the model each for 10,000 iterations
-split into 400 batches each of length 25. For each chain, we discard the
-first 2000 iterations as burn-in and use a thinning rate of 4 for a
-resulting 6000 samples from the joint posterior. We fit the model using
-5 nearest neighbors and an exponential correlation function. We also
-specify the `k.fold` argument to perform 2-fold cross-validation after
-fitting the full model. Run `?spPGOcc` for more detailed information on
-all function arguments.
+rate of 0.43. We run 3 chains of the model for 20,000 iterations split
+into 800 batches each of length 25. For each chain, we discard the first
+8000 iterations as burn-in and use a thinning rate of 4 for a resulting
+9000 samples from the joint posterior. We fit the model using 5 nearest
+neighbors and an exponential correlation function. We also specify the
+`k.fold` argument to perform 2-fold cross-validation after fitting the
+full model. Run `?spPGOcc` for more detailed information on all function
+arguments.
 
 ``` r
 # Run the model
 out <- spPGOcc(occ.formula = btbw.occ.formula,
                det.formula = btbw.det.formula,
-               data = btbwHBEF, n.batch = 400, batch.length = 25,
+               data = btbwHBEF, n.batch = 800, batch.length = 25,
                accept.rate = 0.43, cov.model = "exponential", 
-               NNGP = TRUE, n.neighbors = 5, n.burn = 2000, 
-               n.thin = 4, n.chains = 3, verbose = FALSE, k.fold = 2)
+               NNGP = TRUE, n.neighbors = 5, n.burn = 8000, 
+               n.thin = 4, n.chains = 3, verbose = FALSE, 
+               k.fold = 2, k.fold.threads = 2)
 ```
 
 This will produce a large output object, and you can use `str(out)` to
@@ -138,34 +143,34 @@ summary(out)
 #> Call:
 #> spPGOcc(occ.formula = btbw.occ.formula, det.formula = btbw.det.formula, 
 #>     data = btbwHBEF, cov.model = "exponential", NNGP = TRUE, 
-#>     n.neighbors = 5, n.batch = 400, batch.length = 25, accept.rate = 0.43, 
-#>     verbose = FALSE, n.burn = 2000, n.thin = 4, n.chains = 3, 
-#>     k.fold = 2)
+#>     n.neighbors = 5, n.batch = 800, batch.length = 25, accept.rate = 0.43, 
+#>     verbose = FALSE, n.burn = 8000, n.thin = 4, n.chains = 3, 
+#>     k.fold = 2, k.fold.threads = 2)
 #> 
-#> Samples per Chain: 10000
-#> Burn-in: 2000
+#> Samples per Chain: 20000
+#> Burn-in: 8000
 #> Thinning Rate: 4
 #> Number of Chains: 3
-#> Total Posterior Samples: 6000
-#> Run Time (min): 0.7627
+#> Total Posterior Samples: 9000
+#> Run Time (min): 1.3642
 #> 
 #> Occurrence (logit scale): 
-#>                          Mean     SD    2.5%     50%   97.5%   Rhat ESS
-#> (Intercept)            4.0762 0.6183  3.0681  4.0071  5.4855 1.0019 261
-#> scale(Elevation)      -0.5203 0.2249 -0.9772 -0.5132 -0.0825 1.0039 984
-#> I(scale(Elevation)^2) -1.1806 0.2257 -1.6958 -1.1593 -0.7969 1.0033 244
+#>                          Mean     SD    2.5%     50%   97.5%   Rhat  ESS
+#> (Intercept)            3.9946 0.5810  3.0233  3.9337  5.2932 1.0302  354
+#> scale(Elevation)      -0.5235 0.2193 -0.9785 -0.5145 -0.1082 1.0013 1368
+#> I(scale(Elevation)^2) -1.1673 0.2117 -1.6341 -1.1489 -0.8003 1.0026  571
 #> 
 #> Detection (logit scale): 
 #>                    Mean     SD    2.5%     50%  97.5%   Rhat  ESS
-#> (Intercept)      0.6647 0.1155  0.4398  0.6623 0.8955 1.0012 5605
-#> scale(day)       0.2899 0.0709  0.1507  0.2900 0.4273 1.0020 6000
-#> scale(tod)      -0.0319 0.0697 -0.1680 -0.0327 0.1055 0.9999 6000
-#> I(scale(day)^2) -0.0756 0.0867 -0.2476 -0.0752 0.0926 1.0000 6000
+#> (Intercept)      0.6621 0.1136  0.4429  0.6602 0.8872 1.0009 8235
+#> scale(day)       0.2912 0.0701  0.1526  0.2910 0.4294 1.0019 9000
+#> scale(tod)      -0.0306 0.0699 -0.1672 -0.0299 0.1057 1.0025 9000
+#> I(scale(day)^2) -0.0753 0.0861 -0.2456 -0.0753 0.0927 0.9999 9000
 #> 
 #> Spatial Covariance: 
 #>            Mean     SD   2.5%    50%  97.5%   Rhat ESS
-#> sigma.sq 1.2610 1.0218 0.2063 0.9694 4.0863 1.0130 101
-#> phi      0.0093 0.0085 0.0009 0.0056 0.0294 1.0763  45
+#> sigma.sq 1.1864 0.9200 0.2306 0.9314 3.5575 1.0336 160
+#> phi      0.0075 0.0075 0.0007 0.0044 0.0272 1.0668 111
 ```
 
 ### Posterior predictive check
@@ -185,13 +190,13 @@ summary(ppc.out)
 #> Call:
 #> ppcOcc(object = out, fit.stat = "freeman-tukey", group = 1)
 #> 
-#> Samples per Chain: 10000
-#> Burn-in: 2000
+#> Samples per Chain: 20000
+#> Burn-in: 8000
 #> Thinning Rate: 4
 #> Number of Chains: 3
-#> Total Posterior Samples: 6000
+#> Total Posterior Samples: 9000
 #> 
-#> Bayesian p-value:  0.4828 
+#> Bayesian p-value:  0.4833 
 #> Fit statistic:  freeman-tukey
 ```
 
@@ -204,7 +209,7 @@ due to Monte Carlo error your results will differ slightly).
 ``` r
 waicOcc(out)
 #>       elpd         pD       WAIC 
-#> -679.88774   22.96844 1405.71235
+#> -680.80100   21.87208 1405.34616
 ```
 
 Alternatively, we can perform k-fold cross-validation (CV) directly in
@@ -217,7 +222,7 @@ value of this CV score.
 
 ``` r
 out$k.fold.deviance
-#> [1] 1414.417
+#> [1] 1414.027
 ```
 
 ### Prediction
@@ -253,14 +258,14 @@ al. 2023). For a description and tutorial of multi-season
 `vignette("spaceTimeModels")`. For a tutorial on spatially-varying
 coefficient models in `spOccupancy`, see `vignette("svcModels")` and
 `vignette(mcmcSVCModels)` and our associated papers that describe the
-[methods](https://www.jeffdoser.com/files/pubs/doser2024JABES.pdf)
-(Doser et al. 2024A) and [applications to
+[methods](https://doserlab.com/files/pubs/doser2024JABES.pdf) (Doser et
+al. 2024A) and [applications to
 ecology](https://onlinelibrary.wiley.com/doi/epdf/10.1111/geb.13814)
 (Doser et al. 2024B) in much more detail.
 
 ## References
 
-Doser, J. W., Finley, A. O., Kery, M., and Zipkin, E. F. (2022a).
+Doser, J. W., Finley, A. O., Kery, M., and Zipkin, E. F. (2022).
 spOccupancy: An R package for single-species, multi-species, and
 integrated spatial occupancy models. Methods in Ecology and Evolution.
 13(8) 1670-1678. <https://doi.org/10.1111/2041-210X.13897>.

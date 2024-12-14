@@ -1,10 +1,10 @@
 svcMsPGOcc <- function(occ.formula, det.formula, data, inits, priors, 
-		      tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		      n.neighbors = 15, search.type = "cb", std.by.sp = FALSE, n.factors, 
-		      n.batch, batch.length, accept.rate = 0.43,
-		      n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		      n.burn = round(.10 * n.batch * batch.length), 
-		      n.thin = 1, n.chains = 1, ...){
+                       tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
+                       n.neighbors = 15, search.type = "cb", std.by.sp = FALSE, n.factors, 
+                       n.batch, batch.length, accept.rate = 0.43,
+                       n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                       n.burn = round(.10 * n.batch * batch.length), 
+                       n.thin = 1, n.chains = 1, ...){
 
   ptm <- proc.time()
 
@@ -974,7 +974,7 @@ svcMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
     beta.star.inits <- rep(beta.star.inits, N)
   } else {
     sigma.sq.psi.inits <- 0
@@ -1006,7 +1006,7 @@ svcMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-    alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+    alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
     alpha.star.inits <- rep(alpha.star.inits, N)
   } else {
     sigma.sq.p.inits <- 0
@@ -1278,12 +1278,12 @@ svcMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         }
         if (p.det.re > 0) {
           sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-          alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+          alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
           alpha.star.inits <- rep(alpha.star.inits, N)
         }
         if (p.occ.re > 0) {
           sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-          beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+          beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           beta.star.inits <- rep(beta.star.inits, N)
         }
       }
@@ -1292,25 +1292,25 @@ svcMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       # Run the model in C
       # Getting real close to 65 arguments....
       out.tmp[[i]] <- .Call("svcMsPGOccNNGP", y, X.big, X.w.big, X.p, coords, X.re, X.p.re, 
-      		      range.ind, consts, K, n.occ.re.long, n.det.re.long, 
-        	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
-        	            beta.inits, alpha.inits, z.inits,
-        	            beta.comm.inits, 
-        	            alpha.comm.inits, tau.sq.beta.inits, 
-        	            tau.sq.alpha.inits, phi.inits, 
-        	            lambda.inits, w.inits, nu.inits, 
-      		    sigma.sq.psi.inits, sigma.sq.p.inits, 
-        		    beta.star.inits, alpha.star.inits, z.long.indx, 
-        		    beta.star.indx, beta.level.indx, alpha.star.indx, 
-        		    alpha.level.indx, mu.beta.comm, 
-        	            mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
-        	            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
-        	            tau.sq.alpha.b, phi.a, phi.b,
-        	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-        		    sigma.sq.p.a, sigma.sq.p.b, 
-        		    tuning.c, cov.model.indx, n.batch, 
-        	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-        	            samples.info, chain.info)
+                            range.ind, consts, K, n.occ.re.long, n.det.re.long, 
+                            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
+                            beta.inits, alpha.inits, z.inits,
+                            beta.comm.inits, 
+                            alpha.comm.inits, tau.sq.beta.inits, 
+                            tau.sq.alpha.inits, phi.inits, 
+                            lambda.inits, w.inits, nu.inits, 
+                            sigma.sq.psi.inits, sigma.sq.p.inits, 
+                            beta.star.inits, alpha.star.inits, z.long.indx, 
+                            beta.star.indx, beta.level.indx, alpha.star.indx, 
+                            alpha.level.indx, mu.beta.comm, 
+                            mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
+                            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
+                            tau.sq.alpha.b, phi.a, phi.b,
+                            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                            sigma.sq.p.a, sigma.sq.p.b, 
+                            tuning.c, cov.model.indx, n.batch, 
+                            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+                            samples.info, chain.info)
       chain.info[1] <- chain.info[1] + 1
     }
     # Calculate R-Hat ---------------

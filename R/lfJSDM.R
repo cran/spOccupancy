@@ -1,9 +1,9 @@
-lfJSDM <- function(formula, data, inits, priors, 
-		   n.factors, n.samples,
-		   n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		   n.burn = round(.10 * n.samples), 
-		   n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		   k.fold.seed = 100, k.fold.only = FALSE, ...){
+lfJSDM <- function(formula, data, inits, priors, n.factors, n.samples,
+                   n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                   n.burn = round(.10 * n.samples), 
+                   n.thin = 1, n.chains = 1, 
+                   k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+                   k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -39,6 +39,7 @@ lfJSDM <- function(formula, data, inits, priors,
     stop("error: data must be a list")
   }
   names(data) <- tolower(names(data))
+  data.orig <- data
   if (!'y' %in% names(data)) {
     stop("error: detection-nondetection data y must be specified in data")
   }
@@ -423,7 +424,7 @@ lfJSDM <- function(formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
     beta.star.inits <- rep(beta.star.inits, N)
   } else {
     sigma.sq.psi.inits <- 0
@@ -482,9 +483,14 @@ lfJSDM <- function(formula, data, inits, priors,
   storage.mode(sigma.sq.psi.b) <- "double"
   storage.mode(beta.star.inits) <- "double"
   storage.mode(beta.star.indx) <- "integer"
+  # Initial seed
+  if (! exists(".Random.seed")) runif(1)
+  init.seed <- .Random.seed
 
   # Fit the model ---------------------------------------------------------
   out.tmp <- list()
+  # Random seed information for each chain of the model. 
+  seeds.list <- list()
   out <- list()
   if (!k.fold.only) {
     for (i in 1:n.chains) {
@@ -493,33 +499,33 @@ lfJSDM <- function(formula, data, inits, priors,
         beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
         tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
         beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-              		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                   sqrt(tau.sq.beta.inits)), N, p.occ)
         beta.inits <- c(beta.inits)
-	if (q != 0) {
+        if (q != 0) {
           lambda.inits <- matrix(0, N, q)
           diag(lambda.inits) <- 1
           lambda.inits[lower.tri(lambda.inits)] <- rnorm(sum(lower.tri(lambda.inits)))
           lambda.inits <- c(lambda.inits)
-	}
+        }
         if (p.occ.re > 0) {
           sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-          beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+          beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           beta.star.inits <- rep(beta.star.inits, N)
         }
       }
-
       storage.mode(chain.info) <- "integer"
       # Run the model in C
       out.tmp[[i]] <- .Call("lfJSDM", y, X, X.re, consts, n.occ.re.long, beta.inits,
-          		  beta.comm.inits, tau.sq.beta.inits, lambda.inits, 
-          		  sigma.sq.psi.inits, beta.star.inits, 
-          		  beta.star.indx, beta.level.indx, 
-          		  mu.beta.comm, Sigma.beta.comm,
+                            beta.comm.inits, tau.sq.beta.inits, lambda.inits, 
+                            sigma.sq.psi.inits, beta.star.inits, 
+                            beta.star.indx, beta.level.indx, 
+                            mu.beta.comm, Sigma.beta.comm,
         	                  tau.sq.beta.a, tau.sq.beta.b, 
-          		  sigma.sq.psi.a, sigma.sq.psi.b, 
-          		  n.samples, n.omp.threads, verbose, n.report, 
+                            sigma.sq.psi.a, sigma.sq.psi.b, 
+                            n.samples, n.omp.threads, verbose, n.report, 
         	                  samples.info, chain.info)
       chain.info[1] <- chain.info[1] + 1
+      seeds.list[[i]] <- .Random.seed
     }
     # Calculate R-Hat ---------------
     out$rhat <- list()
@@ -629,6 +635,16 @@ lfJSDM <- function(formula, data, inits, priors,
     } else {
       out$psiRE <- FALSE
     }
+    # Send out objects needed for updateMCMC 
+    update.list <- list()
+    update.list$n.samples <- n.samples
+    update.list$n.omp.threads <- n.omp.threads
+    update.list$data <- data.orig
+    update.list$priors <- priors
+    update.list$formula <- formula
+    # Random seed to have for updating. 
+    update.list$final.seed <- seeds.list
+    out$update <- update.list
   }
   # K-fold cross-validation -------
   if (!missing(k.fold)) {
@@ -671,7 +687,7 @@ lfJSDM <- function(formula, data, inits, priors,
       if (p.occ.re > 0) {	
         beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
         beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-        beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+        beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
         			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
         beta.star.inits.fit <- rep(beta.star.inits.fit, N)
         re.level.names.fit <- list()
@@ -769,11 +785,11 @@ lfJSDM <- function(formula, data, inits, priors,
       if (p.occ.re > 0) {X.0 <- cbind(X.0, X.re.0)}
       out.pred <- predict.lfJSDM(out.fit, X.0, coords.0, ignore.RE = FALSE)
       like.samples <- matrix(NA, N, J.0)
-      for (q in 1:N) {
+      for (r in 1:N) {
         for (j in 1:J.0) {
-          like.samples[q, j] <- mean(dbinom(y.big.0[q, j], 1, out.pred$psi.0.samples[, q, j]))
+          like.samples[r, j] <- mean(dbinom(y.big.0[r, j], 1, out.pred$psi.0.samples[, r, j]))
         } # j
-      } # q
+      } # r
 
       apply(like.samples, 1, function(a) sum(log(a), na.rm = TRUE))
     }

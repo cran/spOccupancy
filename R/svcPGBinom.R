@@ -1,11 +1,12 @@
 svcPGBinom <- function(formula, data, inits, priors, tuning, 
                        svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		       n.neighbors = 15, search.type = 'cb', n.batch, 
-		       batch.length, accept.rate = 0.43,
-		       n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		       n.burn = round(.10 * n.batch * batch.length), 
-		       n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		       k.fold.seed = 100, k.fold.only = FALSE, ...){
+                       n.neighbors = 15, search.type = 'cb', n.batch, 
+                       batch.length, accept.rate = 0.43,
+                       n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                       n.burn = round(.10 * n.batch * batch.length), 
+                       n.thin = 1, n.chains = 1, 
+                       k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+                       k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -554,7 +555,7 @@ svcPGBinom <- function(formula, data, inits, priors, tuning,
       }
     }
     beta.star.indx <- rep(0:(p.re - 1), n.re.long)
-    beta.star.inits <- rnorm(n.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
   } else {
     sigma.sq.psi.inits <- 0
     beta.star.indx <- 0
@@ -758,11 +759,11 @@ svcPGBinom <- function(formula, data, inits, priors, tuning,
         if ((i > 1) & (!fix.inits)) {
           beta.inits <- rnorm(p, mu.beta, sqrt(sigma.beta))
           if (!fixed.params[which(all.params == 'sigma.sq')]) {
-	    if (sigma.sq.ig) {
+            if (sigma.sq.ig) {
               sigma.sq.inits <- rigamma(p.svc, sigma.sq.a, sigma.sq.b)
-	    } else {
+            } else {
               sigma.sq.inits <- runif(p.svc, sigma.sq.a, sigma.sq.b)
-	    }
+            }
           }
           phi.inits <- runif(p.svc, phi.a, phi.b)
           if (cov.model == 'matern') {
@@ -770,21 +771,21 @@ svcPGBinom <- function(formula, data, inits, priors, tuning,
           }
           if (p.re > 0) {
             sigma.sq.psi.inits <- runif(p.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           }
         }
         storage.mode(chain.info) <- "integer"
         # Run the model in C    
         out.tmp[[i]] <- .Call("svcPGBinomNNGP", y, X, X.w, coords, X.re, consts, 
-        	              weights, n.re.long, 
-            	              n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx, 
+                              weights, n.re.long, 
+                              n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx, 
                               beta.inits, sigma.sq.psi.inits, beta.star.inits, 
                               w.inits, phi.inits, sigma.sq.inits, nu.inits, 
                               beta.star.indx, beta.level.indx, mu.beta, 
                               Sigma.beta, phi.a, phi.b, 
                               sigma.sq.a, sigma.sq.b, nu.a, nu.b, 
-          		      sigma.sq.psi.a, sigma.sq.psi.b, 
-        	              tuning.c, cov.model.indx,
+                              sigma.sq.psi.a, sigma.sq.psi.b, 
+                              tuning.c, cov.model.indx,
                               n.batch, batch.length, 
                               accept.rate, n.omp.threads, verbose, n.report, 
                               samples.info, chain.info, fixed.params, sigma.sq.ig)
@@ -931,7 +932,7 @@ svcPGBinom <- function(formula, data, inits, priors, tuning,
         if (p.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.re - 1), n.re.long.fit)
           beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.re.fit, 
+          beta.star.inits.fit <- rnorm(n.re.fit, 0,
           			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           re.level.names.fit <- list()
           for (t in 1:p.re) {

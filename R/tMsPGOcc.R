@@ -1,9 +1,9 @@
 tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors, 
                      tuning, n.batch, batch.length, 
-		     accept.rate = 0.43, n.omp.threads = 1, 
-		     verbose = TRUE, ar1 = FALSE, n.report = 100, 
+                     accept.rate = 0.43, n.omp.threads = 1, 
+                     verbose = TRUE, ar1 = FALSE, n.report = 100, 
                      n.burn = round(.10 * n.batch * batch.length), 
-                     n.thin = 1, n.chains = 1, ...){
+                     n.thin = 1, n.chains = 1, ...) {
 
   ptm <- proc.time()
 
@@ -230,7 +230,7 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   if (p.det.re == 0) n.det.re.long <- 0
   # Number of repeat visits
   n.rep <- apply(y.big[1, , , , drop = FALSE], c(2, 3), function(a) sum(!is.na(a)))
-  K.max <- max(n.rep)
+  K.max <- dim(y.big)[4]
   # Because I like K better than n.rep
   K <- n.rep
   if (missing(n.batch)) {
@@ -1036,10 +1036,10 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
       }
       beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-            		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                 sqrt(tau.sq.beta.inits)), N, p.occ)
       beta.inits <- c(beta.inits)
       alpha.inits <- matrix(rnorm(N * p.det, alpha.comm.inits, 
-            		      sqrt(tau.sq.alpha.inits)), N, p.det)
+                                  sqrt(tau.sq.alpha.inits)), N, p.det)
       alpha.inits <- c(alpha.inits)
       if (p.det.re > 0) {
         sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
@@ -1063,19 +1063,19 @@ tMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
     storage.mode(chain.info) <- "integer"
     # Run the model in C
     out.tmp[[i]] <- .Call("tMsPGOcc", y, X, X.p, X.re, X.p.re, consts, 
-      		    n.occ.re.long, n.det.re.long, beta.inits, 
-      		    alpha.inits, z.inits, beta.comm.inits, 
-      	            alpha.comm.inits, tau.sq.beta.inits, 
-      	            tau.sq.alpha.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
-      		    beta.star.inits, alpha.star.inits, z.long.indx, z.year.indx, 
-    		            z.dat.indx, z.site.indx, beta.star.indx, 
-      		    beta.level.indx, alpha.star.indx, alpha.level.indx, mu.beta.comm, 
-      	            mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
-      	            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
-      	            tau.sq.alpha.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-      		    sigma.sq.p.a, sigma.sq.p.b, ar1, ar1.vals,
-      		    tuning.c, n.batch, batch.length, accept.rate, 
-      		    n.omp.threads, verbose, n.report, samples.info, chain.info)
+                          n.occ.re.long, n.det.re.long, beta.inits, 
+                          alpha.inits, z.inits, beta.comm.inits, 
+                          alpha.comm.inits, tau.sq.beta.inits, 
+                          tau.sq.alpha.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
+                          beta.star.inits, alpha.star.inits, z.long.indx, z.year.indx, 
+                          z.dat.indx, z.site.indx, beta.star.indx, 
+                          beta.level.indx, alpha.star.indx, alpha.level.indx, mu.beta.comm, 
+                          mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
+                          tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
+                          tau.sq.alpha.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                          sigma.sq.p.a, sigma.sq.p.b, ar1, ar1.vals,
+                          tuning.c, n.batch, batch.length, accept.rate, 
+                          n.omp.threads, verbose, n.report, samples.info, chain.info)
     chain.info[1] <- chain.info[1] + 1
   }
   # Calculate R-Hat ---------------

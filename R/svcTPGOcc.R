@@ -1,11 +1,12 @@
 svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors, 
-		      tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		      n.neighbors = 15, search.type = 'cb', n.batch, 
-		      batch.length, accept.rate = 0.43, n.omp.threads = 1, 
-		      verbose = TRUE, ar1 = FALSE, n.report = 100, 
-		      n.burn = round(.10 * n.batch * batch.length), 
-		      n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		      k.fold.seed = 100, k.fold.only = FALSE, ...){
+                      tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
+                      n.neighbors = 15, search.type = 'cb', n.batch, 
+                      batch.length, accept.rate = 0.43, n.omp.threads = 1, 
+                      verbose = TRUE, ar1 = FALSE, n.report = 100, 
+                      n.burn = round(.10 * n.batch * batch.length), 
+                      n.thin = 1, n.chains = 1, 
+                      k.fold, k.fold.threads = 1, 
+                      k.fold.seed = 100, k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -925,7 +926,7 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
   } else {
     sigma.sq.psi.inits <- 0
     beta.star.indx <- 0
@@ -955,7 +956,7 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-    alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+    alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
   } else {
     sigma.sq.p.inits <- 0
     alpha.star.indx <- 0
@@ -1230,27 +1231,27 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if ((i > 1) & (!fix.inits)) {
           beta.inits <- rnorm(p.occ, mu.beta, sqrt(sigma.beta))
           alpha.inits <- rnorm(p.det, mu.alpha, sqrt(sigma.alpha))
-	  if (sigma.sq.ig) {
+          if (sigma.sq.ig) {
             sigma.sq.inits <- rigamma(p.svc, sigma.sq.a, sigma.sq.b)
-	  } else {
+          } else {
             sigma.sq.inits <- runif(p.svc, sigma.sq.a, sigma.sq.b)
-	  }
+          }
           phi.inits <- runif(p.svc, phi.a, phi.b)
           if (cov.model == 'matern') {
             nu.inits <- runif(p.svc, nu.a, nu.b)
           }
           if (p.det.re > 0) {
             sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-            alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+            alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
           }
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           }
-	  if (ar1) {
+          if (ar1) {
             ar1.vals[5] <- runif(1, rho.a, rho.b)
             ar1.vals[6] <- runif(1, 0.5, 10)	
-	  }
+          }
         }
         storage.mode(curr.chain) <- "integer"
         # Note that the upper limit on the number of arguments is 65, which 
@@ -1260,22 +1261,20 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
                               n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
                               beta.inits, alpha.inits, sigma.sq.psi.inits, 
                               sigma.sq.p.inits, beta.star.inits, alpha.star.inits, 
-          		      phi.inits, sigma.sq.inits, nu.inits,
+                              phi.inits, sigma.sq.inits, nu.inits,
                               w.inits, z.inits, z.long.indx, z.year.indx,
                               z.dat.indx, beta.star.indx, beta.level.indx,
                               alpha.star.indx, alpha.level.indx,
                               mu.beta, Sigma.beta, mu.alpha, Sigma.alpha, 
                               phi.a, phi.b, sigma.sq.a, sigma.sq.b, nu.a, nu.b,
                               sigma.sq.psi.a, sigma.sq.psi.b, sigma.sq.p.a, sigma.sq.p.b,
-			      ar1.vals, tuning.c, cov.model.indx, 
-			      n.batch, batch.length, accept.rate, 
+                              ar1.vals, tuning.c, cov.model.indx, 
+                              n.batch, batch.length, accept.rate, 
                               n.omp.threads, verbose, n.report,  
                               n.burn, n.thin, n.post.samples, curr.chain, 
-			      n.chains, sigma.sq.ig, grid.index.c)
+                              n.chains, sigma.sq.ig, grid.index.c)
         curr.chain <- curr.chain + 1
       }
-      out <- list()
-
       # Calculate R-Hat ---------------
       if (cov.model != 'matern') {
         theta.names <- paste(rep(c('sigma.sq', 'phi'), each = p.svc), x.names[svc.cols], sep = '-')
@@ -1503,7 +1502,7 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.det.re > 0) {	
           alpha.star.indx.fit <- rep(0:(p.det.re - 1), n.det.re.long.fit)
           alpha.level.indx.fit <- sort(unique(c(X.p.re.fit)))
-          alpha.star.inits.fit <- rnorm(n.det.re.fit, 
+          alpha.star.inits.fit <- rnorm(n.det.re.fit, 0,
           			      sqrt(sigma.sq.p.inits[alpha.star.indx.fit + 1]))
           p.re.level.names.fit <- list()
           for (t in 1:p.det.re) {
@@ -1523,7 +1522,7 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
           beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
           			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           re.level.names.fit <- list()
           for (t in 1:p.occ.re) {
@@ -1746,3 +1745,4 @@ svcTPGOcc <- function(occ.formula, det.formula, data, inits, priors,
   out$run.time <- proc.time() - ptm
   out
 }
+

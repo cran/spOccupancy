@@ -1,13 +1,14 @@
 sfJSDM <- function(formula, data, inits, priors, 
-		   tuning, cov.model = 'exponential', NNGP = TRUE, 
-		   n.neighbors = 15, search.type = "cb", 
-		   std.by.sp = FALSE, n.factors, 
-		   n.batch, batch.length, accept.rate = 0.43,
-		   n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		   n.burn = round(.10 * n.batch * batch.length), 
-		   n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		   k.fold.seed = 100, k.fold.only = FALSE, monitors, 
-		   keep.only.mean.95, shared.spatial = FALSE, ...){
+                   tuning, cov.model = 'exponential', NNGP = TRUE, 
+                   n.neighbors = 15, search.type = "cb", 
+                   std.by.sp = FALSE, n.factors, 
+                   n.batch, batch.length, accept.rate = 0.43,
+                   n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                   n.burn = round(.10 * n.batch * batch.length), 
+                   n.thin = 1, n.chains = 1, 
+                   k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+                   k.fold.only = FALSE, monitors, 
+                   keep.only.mean.95, shared.spatial = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -654,7 +655,7 @@ sfJSDM <- function(formula, data, inits, priors,
     }
     beta.star.inits <- t(beta.star.inits)
   } else {
-      beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+      beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
       beta.star.inits <- rep(beta.star.inits, N)
       if (verbose) {
         message('beta.star is not specified in initial values.\nSetting initial values to random values from the random effects variance\n')
@@ -928,25 +929,25 @@ sfJSDM <- function(formula, data, inits, priors,
           if (!ind.betas) {
             beta.comm.inits <- rnorm(p.occ, mu.beta.comm, sqrt(sigma.beta.comm))
             tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
-	  }
+          }
           beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-                		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                     sqrt(tau.sq.beta.inits)), N, p.occ)
           beta.inits <- c(beta.inits)
-	  if (!shared.spatial) {
+          if (!shared.spatial) {
             lambda.inits <- matrix(0, N, q)
             diag(lambda.inits) <- 1
             lambda.inits[lower.tri(lambda.inits)] <- rnorm(sum(lower.tri(lambda.inits)))
             lambda.inits <- c(lambda.inits)
-	  } else {
+          } else {
             sigma.sq.inits <- rep(1, 0.1, 5)
-	  }
+          }
           phi.inits <- runif(q, phi.a, phi.b)
           if (cov.model == 'matern') {
             nu.inits <- runif(q, nu.a, nu.b)
           }
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
             beta.star.inits <- rep(beta.star.inits, N)
           }
         }
@@ -954,18 +955,18 @@ sfJSDM <- function(formula, data, inits, priors,
         storage.mode(chain.info) <- "integer"
         # Run the model in C
         out.tmp[[i]] <- .Call("sfJSDMNNGP", y, X.big, coords, X.re, consts, n.occ.re.long, 
-          	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
-          	            beta.inits, beta.comm.inits, tau.sq.beta.inits, phi.inits, 
-          	            lambda.inits, sigma.sq.inits, nu.inits, 
-			    sigma.sq.psi.inits, beta.star.inits, w.inits,
-          		    beta.star.indx, beta.level.indx, mu.beta.comm, Sigma.beta.comm, 
-          	            tau.sq.beta.a, tau.sq.beta.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b,
-          	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-          		    tuning.c, cov.model.indx, n.batch, 
-          	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-          	            samples.info, chain.info, monitors, range.ind)
+                              n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
+                              beta.inits, beta.comm.inits, tau.sq.beta.inits, phi.inits, 
+                              lambda.inits, sigma.sq.inits, nu.inits, 
+                              sigma.sq.psi.inits, beta.star.inits, w.inits,
+                              beta.star.indx, beta.level.indx, mu.beta.comm, Sigma.beta.comm, 
+                              tau.sq.beta.a, tau.sq.beta.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b,
+                              nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                              tuning.c, cov.model.indx, n.batch, 
+                              batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+                              samples.info, chain.info, monitors, range.ind)
         chain.info[1] <- chain.info[1] + 1
-	seeds.list[[i]] <- .Random.seed
+        seeds.list[[i]] <- .Random.seed
       }
       # Calculate R-Hat ---------------
       out <- list()
@@ -1280,7 +1281,7 @@ sfJSDM <- function(formula, data, inits, priors,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
 	  beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
 	  			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           beta.star.inits.fit <- rep(beta.star.inits.fit, N)
           re.level.names.fit <- list()
@@ -1430,9 +1431,9 @@ sfJSDM <- function(formula, data, inits, priors,
         out.pred <- predict.sfJSDM(out.fit, X.0, 
 				      coords.0, verbose = FALSE, ignore.RE = FALSE)
 	like.samples <- matrix(NA, N, J.0)
-	for (q in 1:N) {
+	for (r in 1:N) {
           for (j in 1:J.0) {
-            like.samples[q, j] <- mean(dbinom(y.big.0[q, j], 1, out.pred$psi.0.samples[, q, j]))
+            like.samples[r, j] <- mean(dbinom(y.big.0[r, j], 1, out.pred$psi.0.samples[, r, j]))
 	  } # j
 	} # q
 

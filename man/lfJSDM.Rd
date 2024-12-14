@@ -82,7 +82,8 @@ lfJSDM(formula, data, inits, priors, n.factors,
 \item{n.samples}{the number of posterior samples to collect in each chain.}
 
 \item{n.omp.threads}{a positive integer indicating the number of threads
-  to use for SMP parallel processing. The package must be compiled for 
+  to use for SMP parallel processing within chains. This will have no impact
+  on model run times for non-spatial models. The package must be compiled for 
   OpenMP support. For most Intel-based machines, we recommend setting 
   \code{n.omp.threads} up to the number of hypterthreaded cores. Note, 
   \code{n.omp.threads} > 1 might not work on some systems.}
@@ -259,6 +260,8 @@ data.list <- list(y = y[, , 1],
 prior.list <- list(beta.comm.normal = list(mean = 0, var = 2.72),
                    tau.sq.beta.ig = list(a = 0.1, b = 0.1)) 
 inits.list <- list(beta.comm = 0, beta = 0, tau.sq.beta = 1) 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- lfJSDM(formula = ~ occ.cov.1 + occ.cov.2 + (1 | occ.re.1), 
               data = data.list, 
               inits = inits.list, 

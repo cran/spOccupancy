@@ -153,7 +153,7 @@ of neighbors using WAIC or k-fold cross-validation.}
   0.43. See Roberts and Rosenthal (2009) for details.}
 
 \item{n.omp.threads}{a positive integer indicating the number of threads
-  to use for SMP parallel processing. The package must be compiled for 
+  to use for SMP parallel processing within chains. The package must be compiled for 
   OpenMP support. For most Intel-based machines, we recommend setting 
   \code{n.omp.threads} up to the number of hyperthreaded cores. Note, 
   \code{n.omp.threads} > 1 might not work on some systems. Currently only 
@@ -178,7 +178,7 @@ of neighbors using WAIC or k-fold cross-validation.}
   thinning occurs after the \code{n.burn} samples are discarded. Default 
   value is set to 1.}
 
-\item{n.chains}{the number of chains to run in sequence.}
+\item{n.chains}{the number of chains to run.}
 
 \item{k.fold}{specifies the number of \emph{k} folds for cross-validation. 
   If not specified as an argument, then cross-validation is not performed
@@ -382,6 +382,8 @@ batch.length <- 25
 n.iter <- n.batch * batch.length
 
 # Run the model
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- stPGOcc(occ.formula = ~ trend + occ.cov.1, 
                det.formula = ~ det.cov.1 + det.cov.2, 
                data = data.list, 

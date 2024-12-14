@@ -1,11 +1,12 @@
 spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors, 
-		      tuning, cov.model = 'exponential', NNGP = TRUE, 
-		      n.neighbors = 15, search.type = "cb", n.batch, 
-		      batch.length, accept.rate = 0.43,
-		      n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		      n.burn = round(.10 * n.batch * batch.length), 
-		      n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		      k.fold.seed = 100, k.fold.only = FALSE, ...){
+                      tuning, cov.model = 'exponential', NNGP = TRUE, 
+                      n.neighbors = 15, search.type = "cb", n.batch, 
+                      batch.length, accept.rate = 0.43,
+                      n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                      n.burn = round(.10 * n.batch * batch.length), 
+                      n.thin = 1, n.chains = 1, 
+                      k.fold, k.fold.threads = 1, 
+                      k.fold.seed = 100, k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -972,7 +973,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
     beta.star.inits <- rep(beta.star.inits, N)
   } else {
     sigma.sq.psi.inits <- 0
@@ -1004,7 +1005,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       }
     }
     alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-    alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+    alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
     alpha.star.inits <- rep(alpha.star.inits, N)
   } else {
     sigma.sq.p.inits <- 0
@@ -1177,9 +1178,9 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
           tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
           tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
           beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-                		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                               sqrt(tau.sq.beta.inits)), N, p.occ)
           alpha.inits <- matrix(rnorm(N * p.det, alpha.comm.inits, 
-                		      sqrt(tau.sq.alpha.inits)), N, p.det)
+                                sqrt(tau.sq.alpha.inits)), N, p.det)
           if (!fixed.sigma.sq) {
             if (sigma.sq.ig) {
               sigma.sq.inits <- rigamma(N, sigma.sq.a, sigma.sq.b)
@@ -1193,12 +1194,12 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
           }
           if (p.det.re > 0) {
             sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-            alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+            alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
             alpha.star.inits <- rep(alpha.star.inits, N)
           }
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
             beta.star.inits <- rep(beta.star.inits, N)
           }
         }
@@ -1206,21 +1207,21 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         storage.mode(chain.info) <- "integer"
         out.tmp[[i]] <- .Call("spMsPGOcc", y, X, X.p, coords.D, X.re, X.p.re, consts, 
         	                    K, n.occ.re.long, n.det.re.long, 
-          	            beta.inits, alpha.inits, z.inits,
-          	            beta.comm.inits, alpha.comm.inits, tau.sq.beta.inits, 
-          	            tau.sq.alpha.inits, w.inits, phi.inits, 
-          	            sigma.sq.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
+                              beta.inits, alpha.inits, z.inits,
+                              beta.comm.inits, alpha.comm.inits, tau.sq.beta.inits, 
+                              tau.sq.alpha.inits, w.inits, phi.inits, 
+                              sigma.sq.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
         	                    beta.star.inits, alpha.star.inits, z.long.indx, 
-          		    beta.star.indx, beta.level.indx, alpha.star.indx, 
-          		    alpha.level.indx, mu.beta.comm, 
-          	            mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
-          	            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
-          	            tau.sq.alpha.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b, 
-          	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-          		    sigma.sq.p.a, sigma.sq.p.b, 
-        		            tuning.c, cov.model.indx, n.batch, 
-          	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-          	            samples.info, chain.info, sigma.sq.info)
+                              beta.star.indx, beta.level.indx, alpha.star.indx, 
+                              alpha.level.indx, mu.beta.comm, 
+          	                  mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
+          	                  tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
+          	                  tau.sq.alpha.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b, 
+          	                  nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                              sigma.sq.p.a, sigma.sq.p.b, 
+                              tuning.c, cov.model.indx, n.batch, 
+                              batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+                              samples.info, chain.info, sigma.sq.info)
         chain.info[1] <- chain.info[1] + 1
       }
       # Calculate R-Hat ---------------
@@ -1374,7 +1375,6 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       out$type <- "GP"
       out$coords <- coords
       out$cov.model.indx <- cov.model.indx
-      out$q <- q
       out$n.post <- n.post.samples
       out$n.thin <- n.thin
       out$n.burn <- n.burn
@@ -1445,7 +1445,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.det.re > 0) {	
           alpha.star.indx.fit <- rep(0:(p.det.re - 1), n.det.re.long.fit)
 	  alpha.level.indx.fit <- sort(unique(c(X.p.re.fit)))
-          alpha.star.inits.fit <- rnorm(n.det.re.fit, 
+          alpha.star.inits.fit <- rnorm(n.det.re.fit, 0,
 	  			      sqrt(sigma.sq.p.inits[alpha.star.indx.fit + 1]))
           alpha.star.inits.fit <- rep(alpha.star.inits.fit, N)
           p.re.level.names.fit <- list()
@@ -1466,7 +1466,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
 	  beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
 	  			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           beta.star.inits.fit <- rep(beta.star.inits.fit, N)
           re.level.names.fit <- list()
@@ -1787,9 +1787,9 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
           tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
           tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
           beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-                		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                     sqrt(tau.sq.beta.inits)), N, p.occ)
           alpha.inits <- matrix(rnorm(N * p.det, alpha.comm.inits, 
-                		      sqrt(tau.sq.alpha.inits)), N, p.det)
+                                      sqrt(tau.sq.alpha.inits)), N, p.det)
           if (!fixed.sigma.sq) {
             if (sigma.sq.ig) {
               sigma.sq.inits <- rigamma(N, sigma.sq.a, sigma.sq.b)
@@ -1803,12 +1803,12 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
           }
           if (p.det.re > 0) {
             sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-            alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+            alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
             alpha.star.inits <- rep(alpha.star.inits, N)
           }
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
             beta.star.inits <- rep(beta.star.inits, N)
           }
         }
@@ -1816,22 +1816,22 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         storage.mode(chain.info) <- "integer"
         out.tmp[[i]] <- .Call("spMsPGOccNNGP", y, X, X.p, coords, X.re, X.p.re, consts, 
         	                    K, n.occ.re.long, n.det.re.long, 
-          	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
-          	            beta.inits, alpha.inits, z.inits,
-          	            beta.comm.inits, alpha.comm.inits, tau.sq.beta.inits, 
-          	            tau.sq.alpha.inits, w.inits, phi.inits, 
-          	            sigma.sq.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
+                              n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
+                              beta.inits, alpha.inits, z.inits,
+                              beta.comm.inits, alpha.comm.inits, tau.sq.beta.inits, 
+                              tau.sq.alpha.inits, w.inits, phi.inits, 
+                              sigma.sq.inits, nu.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
         	                    beta.star.inits, alpha.star.inits, z.long.indx, 
-          		    beta.star.indx, beta.level.indx, alpha.star.indx, 
-          		    alpha.level.indx, mu.beta.comm, 
-          	            mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
-          	            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
-          	            tau.sq.alpha.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b, 
-          	            nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-          		    sigma.sq.p.a, sigma.sq.p.b, 
-        		            tuning.c, cov.model.indx, n.batch, 
-          	            batch.length, accept.rate, n.omp.threads, verbose, n.report, 
-          	            samples.info, chain.info, sigma.sq.info)
+                              beta.star.indx, beta.level.indx, alpha.star.indx, 
+                              alpha.level.indx, mu.beta.comm, 
+                              mu.alpha.comm, Sigma.beta.comm, Sigma.alpha.comm, 
+                              tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
+                              tau.sq.alpha.b, phi.a, phi.b, sigma.sq.a, sigma.sq.b, 
+                              nu.a, nu.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                              sigma.sq.p.a, sigma.sq.p.b, 
+                              tuning.c, cov.model.indx, n.batch, 
+                              batch.length, accept.rate, n.omp.threads, verbose, n.report, 
+                              samples.info, chain.info, sigma.sq.info)
         chain.info[1] <- chain.info[1] + 1
       }
       # Calculate R-Hat ---------------
@@ -2009,7 +2009,6 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
       out$coords <- coords[order(ord), ]
       out$cov.model.indx <- cov.model.indx
       out$n.neighbors <- n.neighbors
-      out$q <- q
       out$n.post <- n.post.samples
       out$n.thin <- n.thin
       out$n.burn <- n.burn
@@ -2078,7 +2077,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.det.re > 0) {	
           alpha.star.indx.fit <- rep(0:(p.det.re - 1), n.det.re.long.fit)
 	  alpha.level.indx.fit <- sort(unique(c(X.p.re.fit)))
-          alpha.star.inits.fit <- rnorm(n.det.re.fit, 
+          alpha.star.inits.fit <- rnorm(n.det.re.fit, 0,
 	  			      sqrt(sigma.sq.p.inits[alpha.star.indx.fit + 1]))
           alpha.star.inits.fit <- rep(alpha.star.inits.fit, N)
           p.re.level.names.fit <- list()
@@ -2099,7 +2098,7 @@ spMsPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
 	  beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
 	  			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           beta.star.inits.fit <- rep(beta.star.inits.fit, N)
           re.level.names.fit <- list()

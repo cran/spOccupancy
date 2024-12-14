@@ -1,8 +1,8 @@
 msPGOcc <- function(occ.formula, det.formula, data, inits, priors,  
-		    n.samples, n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		    n.burn = round(.10 * n.samples), n.thin = 1, n.chains = 1,
-		    k.fold, k.fold.threads = 1, k.fold.seed = 100, 
-		    k.fold.only = FALSE, ...){
+                    n.samples, n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                    n.burn = round(.10 * n.samples), n.thin = 1, n.chains = 1,
+                    k.fold, k.fold.threads = 1, 
+                    k.fold.seed = 100, k.fold.only = FALSE, ...){
 
     ptm <- proc.time()
 
@@ -717,7 +717,7 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         }
       }
       beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-      beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+      beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
       # Starting values for all species 
       beta.star.inits <- rep(beta.star.inits, N)
     } else {
@@ -748,7 +748,7 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         }
       }
       alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-      alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+      alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
       alpha.star.inits <- rep(alpha.star.inits, N)
     } else {
       sigma.sq.p.inits <- 0
@@ -836,17 +836,17 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
           tau.sq.beta.inits <- runif(p.occ, 0.5, 10)
           tau.sq.alpha.inits <- runif(p.det, 0.5, 10)
           beta.inits <- matrix(rnorm(N * p.occ, beta.comm.inits, 
-                		     sqrt(tau.sq.beta.inits)), N, p.occ)
+                                     sqrt(tau.sq.beta.inits)), N, p.occ)
           alpha.inits <- matrix(rnorm(N * p.det, alpha.comm.inits, 
-                		      sqrt(tau.sq.alpha.inits)), N, p.det)
+                                      sqrt(tau.sq.alpha.inits)), N, p.det)
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
             beta.star.inits <- rep(beta.star.inits, N)
           }
           if (p.det.re > 0) {
             sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-            alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+            alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
             alpha.star.inits <- rep(alpha.star.inits, N)
           }
         }
@@ -854,16 +854,16 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         storage.mode(chain.info) <- "integer"
         out.tmp[[i]] <- .Call("msPGOcc", y, X, X.p, X.re, X.p.re, consts, 
         	                    K, n.occ.re.long, n.det.re.long,
-          	            beta.inits, alpha.inits, z.inits, beta.comm.inits, 
-          	            alpha.comm.inits, tau.sq.beta.inits, tau.sq.alpha.inits, 
-          		    sigma.sq.psi.inits, sigma.sq.p.inits, 
+                              beta.inits, alpha.inits, z.inits, beta.comm.inits, 
+                              alpha.comm.inits, tau.sq.beta.inits, tau.sq.alpha.inits, 
+                              sigma.sq.psi.inits, sigma.sq.p.inits, 
         	                    beta.star.inits, alpha.star.inits, z.long.indx, 
-          		    beta.star.indx, beta.level.indx, alpha.star.indx, 
-          		    alpha.level.indx, mu.beta.comm, mu.alpha.comm, 
-          		    Sigma.beta.comm, Sigma.alpha.comm, 
-          	            tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
-          	            tau.sq.alpha.b, sigma.sq.psi.a, sigma.sq.psi.b, 
-          		    sigma.sq.p.a, sigma.sq.p.b,
+                              beta.star.indx, beta.level.indx, alpha.star.indx, 
+                              alpha.level.indx, mu.beta.comm, mu.alpha.comm, 
+                              Sigma.beta.comm, Sigma.alpha.comm, 
+                              tau.sq.beta.a, tau.sq.beta.b, tau.sq.alpha.a, 
+                              tau.sq.alpha.b, sigma.sq.psi.a, sigma.sq.psi.b, 
+                              sigma.sq.p.a, sigma.sq.p.b,
         	                    n.samples, n.omp.threads, 
         	                    verbose, n.report, samples.info, chain.info)
         chain.info[1] <- chain.info[1] + 1
@@ -1059,7 +1059,7 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.det.re > 0) {	
           alpha.star.indx.fit <- rep(0:(p.det.re - 1), n.det.re.long.fit)
           alpha.level.indx.fit <- sort(unique(c(X.p.re.fit)))
-          alpha.star.inits.fit <- rnorm(n.det.re.fit, 
+          alpha.star.inits.fit <- rnorm(n.det.re.fit, 0,
           			      sqrt(sigma.sq.p.inits[alpha.star.indx.fit + 1]))
           alpha.star.inits.fit <- rep(alpha.star.inits.fit, N)
           p.re.level.names.fit <- list()
@@ -1081,7 +1081,7 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
           beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
           			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           beta.star.inits.fit <- rep(beta.star.inits.fit, N)
           re.level.names.fit <- list()
@@ -1228,21 +1228,21 @@ msPGOcc <- function(occ.formula, det.formula, data, inits, priors,
 
         if (binom) {
           like.samples <- array(NA, c(N, nrow(X.p.0), dim(y.big.0)[3]))
-          for (q in 1:N) {
+          for (r in 1:N) {
             for (j in 1:nrow(X.p.0)) {
               for (k in rep.indx.0[[j]]) {
-                like.samples[q, j, k] <- mean(dbinom(y.big.0[q, j, k], 1,
-                			         out.p.pred$p.0.samples[, q, j] * out.pred$z.0.samples[, q, z.0.long.indx[j]]))
+                like.samples[r, j, k] <- mean(dbinom(y.big.0[r, j, k], 1,
+                			         out.p.pred$p.0.samples[, r, j] * out.pred$z.0.samples[, r, z.0.long.indx[j]]))
               }
             }
           }
         } else {
           like.samples <- matrix(NA, N, nrow(X.p.0))
-          for (q in 1:N) {
+          for (r in 1:N) {
             for (j in 1:nrow(X.p.0)) {
-              like.samples[q, j] <- mean(dbinom(y.0[N * (j - 1) + q], 1,  
-                				out.p.pred$p.0.samples[, q, j] * 
-                			        out.pred$z.0.samples[, q, z.0.long.indx[j]]))
+              like.samples[r, j] <- mean(dbinom(y.0[N * (j - 1) + r], 1,  
+                				out.p.pred$p.0.samples[, r, j] * 
+                			        out.pred$z.0.samples[, r, z.0.long.indx[j]]))
             }
           }
         }

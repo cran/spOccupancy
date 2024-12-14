@@ -1,11 +1,12 @@
 svcTPGBinom <- function(formula, data, inits, priors, 
-		        tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		        n.neighbors = 15, search.type = 'cb', n.batch, 
-		        batch.length, accept.rate = 0.43, n.omp.threads = 1, 
-			verbose = TRUE, ar1 = FALSE, n.report = 100, 
-		        n.burn = round(.10 * n.batch * batch.length), 
-		        n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		        k.fold.seed = 100, k.fold.only = FALSE, ...){
+                        tuning, svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
+                        n.neighbors = 15, search.type = 'cb', n.batch, 
+                        batch.length, accept.rate = 0.43, n.omp.threads = 1, 
+                        verbose = TRUE, ar1 = FALSE, n.report = 100, 
+                        n.burn = round(.10 * n.batch * batch.length), 
+                        n.thin = 1, n.chains = 1, 
+                        k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+                        k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -240,13 +241,6 @@ svcTPGBinom <- function(formula, data, inits, priors,
     priors <- list()
   }
   names(priors) <- tolower(names(priors))
-  # Logical vector indicating what parameters are estimated and what 
-  # parameters are fixed. 6 is the total number of parameter types that 
-  # can be estimated here. Note that phi and nu are both fixed if phi.unif = 'fixed' 
-  all.params <- c('beta', 'alpha', 'phi', 'sigma.sq', 
-		  'sigma.sq.psi', 'sigma.sq.p')
-  n.params <- length(all.params)
-  fixed.params <- rep(FALSE, n.params)
   # beta -----------------------
   if ("beta.normal" %in% names(priors)) {
     if (!is.list(priors$beta.normal) | length(priors$beta.normal) != 2) {
@@ -326,58 +320,45 @@ svcTPGBinom <- function(formula, data, inits, priors,
   }
   if ("sigma.sq.ig" %in% names(priors)) {
     sigma.sq.ig <- TRUE
-    if (priors$sigma.sq.ig[1] == 'fixed') { # inverse-Gamma
-      fixed.params[which(all.params == 'sigma.sq')] <- TRUE 
-      sigma.sq.a <- rep(1, p.svc)
-      sigma.sq.b <- rep(1, p.svc)
-    } else {
-      if (!is.list(priors$sigma.sq.ig) | length(priors$sigma.sq.ig) != 2) {
-        stop("error: sigma.sq.ig must be a list of length 2")
-      }
-      sigma.sq.a <- priors$sigma.sq.ig[[1]]
-      sigma.sq.b <- priors$sigma.sq.ig[[2]]
-      if (length(sigma.sq.a) != p.svc & length(sigma.sq.a) != 1) {
-        stop(paste("error: sigma.sq.ig[[1]] must be a vector of length ", 
-        	   p.svc, " or 1 with elements corresponding to sigma.sqs' shape for each covariate with spatially-varying coefficients", sep = ""))
-      }
-      if (length(sigma.sq.b) != p.svc & length(sigma.sq.b) != 1) {
-        stop(paste("error: sigma.sq.ig[[2]] must be a vector of length ", 
-        	   p.svc, " or 1 with elements corresponding to sigma.sqs' scale for each covariate with spatially-varying coefficients", sep = ""))
-      }
-      if (length(sigma.sq.a) != p.svc) {
-        sigma.sq.a <- rep(sigma.sq.a, p.svc)
-      }
-      if (length(sigma.sq.b) != p.svc) {
-        sigma.sq.b <- rep(sigma.sq.b, p.svc)
-      }
+    if (!is.list(priors$sigma.sq.ig) | length(priors$sigma.sq.ig) != 2) {
+      stop("error: sigma.sq.ig must be a list of length 2")
+    }
+    sigma.sq.a <- priors$sigma.sq.ig[[1]]
+    sigma.sq.b <- priors$sigma.sq.ig[[2]]
+    if (length(sigma.sq.a) != p.svc & length(sigma.sq.a) != 1) {
+      stop(paste("error: sigma.sq.ig[[1]] must be a vector of length ", 
+      	   p.svc, " or 1 with elements corresponding to sigma.sqs' shape for each covariate with spatially-varying coefficients", sep = ""))
+    }
+    if (length(sigma.sq.b) != p.svc & length(sigma.sq.b) != 1) {
+      stop(paste("error: sigma.sq.ig[[2]] must be a vector of length ", 
+      	   p.svc, " or 1 with elements corresponding to sigma.sqs' scale for each covariate with spatially-varying coefficients", sep = ""))
+    }
+    if (length(sigma.sq.a) != p.svc) {
+      sigma.sq.a <- rep(sigma.sq.a, p.svc)
+    }
+    if (length(sigma.sq.b) != p.svc) {
+      sigma.sq.b <- rep(sigma.sq.b, p.svc)
     }
   } else if ("sigma.sq.unif" %in% names(priors)) { # uniform prior
-    if (priors$sigma.sq.unif[1] == 'fixed') {
-      sigma.sq.ig <- TRUE # This just makes the C++ side a bit easier
-      fixed.params[which(all.params == 'sigma.sq')] <- TRUE
-      sigma.sq.a <- 1
-      sigma.sq.b <- 1
-    } else {
-      sigma.sq.ig <- FALSE
-      if (!is.list(priors$sigma.sq.unif) | length(priors$sigma.sq.unif) != 2) {
-        stop("error: sigma.sq.unif must be a list of length 2")
-      }
-      sigma.sq.a <- priors$sigma.sq.unif[[1]]
-      sigma.sq.b <- priors$sigma.sq.unif[[2]]
-      if (length(sigma.sq.a) != p.svc & length(sigma.sq.a) != 1) {
-        stop(paste("error: sigma.sq.unif[[1]] must be a vector of length ", 
-        	   p.svc, " or 1 with elements corresponding to sigma.sqs' shape for each covariate with spatially-varying coefficients", sep = ""))
-      }
-      if (length(sigma.sq.b) != p.svc & length(sigma.sq.b) != 1) {
-        stop(paste("error: sigma.sq.unif[[2]] must be a vector of length ", 
-        	   p.svc, " or 1 with elements corresponding to sigma.sqs' scale for each covariate with spatially-varying coefficients", sep = ""))
-      }
-      if (length(sigma.sq.a) != p.svc) {
-        sigma.sq.a <- rep(sigma.sq.a, p.svc)
-      }
-      if (length(sigma.sq.b) != p.svc) {
-        sigma.sq.b <- rep(sigma.sq.b, p.svc)
-      }
+    sigma.sq.ig <- FALSE
+    if (!is.list(priors$sigma.sq.unif) | length(priors$sigma.sq.unif) != 2) {
+      stop("error: sigma.sq.unif must be a list of length 2")
+    }
+    sigma.sq.a <- priors$sigma.sq.unif[[1]]
+    sigma.sq.b <- priors$sigma.sq.unif[[2]]
+    if (length(sigma.sq.a) != p.svc & length(sigma.sq.a) != 1) {
+      stop(paste("error: sigma.sq.unif[[1]] must be a vector of length ", 
+      	   p.svc, " or 1 with elements corresponding to sigma.sqs' shape for each covariate with spatially-varying coefficients", sep = ""))
+    }
+    if (length(sigma.sq.b) != p.svc & length(sigma.sq.b) != 1) {
+      stop(paste("error: sigma.sq.unif[[2]] must be a vector of length ", 
+      	   p.svc, " or 1 with elements corresponding to sigma.sqs' scale for each covariate with spatially-varying coefficients", sep = ""))
+    }
+    if (length(sigma.sq.a) != p.svc) {
+      sigma.sq.a <- rep(sigma.sq.a, p.svc)
+    }
+    if (length(sigma.sq.b) != p.svc) {
+      sigma.sq.b <- rep(sigma.sq.b, p.svc)
     }
   } else {
     if (verbose) {
@@ -606,7 +587,7 @@ svcTPGBinom <- function(formula, data, inits, priors,
       }
     }
     beta.star.indx <- rep(0:(p.re - 1), n.re.long)
-    beta.star.inits <- rnorm(n.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
   } else {
     sigma.sq.psi.inits <- 0
     beta.star.indx <- 0
@@ -837,7 +818,6 @@ svcTPGBinom <- function(formula, data, inits, priors,
     storage.mode(n.thin) <- "integer"
     storage.mode(curr.chain) <- "integer"
     storage.mode(n.chains) <- "integer"
-    storage.mode(fixed.params) <- "integer"
     n.post.samples <- length(seq(from = n.burn + 1, 
 				 to = n.samples, 
 				 by = as.integer(n.thin)))
@@ -866,30 +846,30 @@ svcTPGBinom <- function(formula, data, inits, priors,
         # Change initial values if i > 1
         if ((i > 1) & (!fix.inits)) {
           beta.inits <- rnorm(p, mu.beta, sqrt(sigma.beta))
-	  if (sigma.sq.ig) {
+          if (sigma.sq.ig) {
             sigma.sq.inits <- rigamma(p.svc, sigma.sq.a, sigma.sq.b)
-	  } else {
+          } else {
             sigma.sq.inits <- runif(p.svc, sigma.sq.a, sigma.sq.b)
-	  }
+          }
           phi.inits <- runif(p.svc, phi.a, phi.b)
           if (cov.model == 'matern') {
             nu.inits <- runif(p.svc, nu.a, nu.b)
           }
           if (p.re > 0) {
             sigma.sq.psi.inits <- runif(p.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           }
-	  if (ar1) {
+          if (ar1) {
             ar1.vals[5] <- runif(1, rho.a, rho.b)
             ar1.vals[6] <- runif(1, 0.5, 10)	
-	  }
+          }
         }
         storage.mode(curr.chain) <- "integer"
         out.tmp[[i]] <- .Call("svcTPGBinomNNGP", y, X, X.w, coords, X.re,  
                               consts, weights, n.re.long,
                               n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx,
                               beta.inits, sigma.sq.psi.inits, beta.star.inits,
-          		      phi.inits, sigma.sq.inits, nu.inits,
+                              phi.inits, sigma.sq.inits, nu.inits,
                               w.inits, z.year.indx, z.dat.indx, 
                               beta.star.indx, beta.level.indx,
                               mu.beta, Sigma.beta,  
@@ -900,7 +880,7 @@ svcTPGBinom <- function(formula, data, inits, priors,
                               n.burn, n.thin, n.post.samples, curr.chain, n.chains, sigma.sq.ig)
         curr.chain <- curr.chain + 1
       }
-      out <- list()
+
       # Get the names for theta which makes Rhat calc easier   
       if (cov.model != 'matern') {
         theta.names <- paste(rep(c('sigma.sq', 'phi'), each = p.svc), 
@@ -1057,7 +1037,7 @@ svcTPGBinom <- function(formula, data, inits, priors,
         if (p.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.re - 1), n.re.long.fit)
           beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.re.fit, 
+          beta.star.inits.fit <- rnorm(n.re.fit, 0,
           			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           re.level.names.fit <- list()
           for (t in 1:p.re) {
@@ -1219,7 +1199,7 @@ svcTPGBinom <- function(formula, data, inits, priors,
       model.deviance <- -2 * model.deviance
       # Return objects from cross-validation
       out$k.fold.deviance <- model.deviance
-      stopImplicitCluster()
+      stopImplicitCluster()  
     } # cross-validation
   } # NNGP
   class(out) <- "svcTPGBinom"

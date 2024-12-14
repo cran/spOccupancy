@@ -13,8 +13,9 @@ spPGOcc(occ.formula, det.formula, data, inits, priors,
         batch.length, accept.rate = 0.43, 
         n.omp.threads = 1, verbose = TRUE, n.report = 100, 
         n.burn = round(.10 * n.batch * batch.length), 
-        n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-        k.fold.seed = 100, k.fold.only = FALSE, ...)
+        n.thin = 1, n.chains = 1, 
+        k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+        k.fold.only = FALSE, ...)
 }
 
 \arguments{
@@ -146,7 +147,7 @@ spPGOcc(occ.formula, det.formula, data, inits, priors,
     0.43. See Roberts and Rosenthal (2009) for details.}
   
   \item{n.omp.threads}{a positive integer indicating
-   the number of threads to use for SMP parallel processing. The package must
+   the number of threads to use for SMP parallel processing within-chains. The package must
    be compiled for OpenMP support. For most Intel-based machines, we
    recommend setting \code{n.omp.threads} up to the number of
    hyperthreaded cores. Note, \code{n.omp.threads} > 1 might not
@@ -167,7 +168,7 @@ spPGOcc(occ.formula, det.formula, data, inits, priors,
     thinning occurs after the \code{n.burn} samples are discarded. Default 
     value is set to 1.}
 
-  \item{n.chains}{the number of MCMC chains to run in sequence.}
+  \item{n.chains}{the number of MCMC chains to run.}
 
   \item{k.fold}{specifies the number of \emph{k} folds for cross-validation. 
     If not specified as an argument, then cross-validation is not performed
@@ -342,6 +343,8 @@ inits.list <- list(alpha = 0, beta = 0,
 # Tuning
 tuning.list <- list(phi = 1) 
 
+# Note that this is just a test case and more iterations/chains may need to 
+# be run to ensure convergence.
 out <- spPGOcc(occ.formula = ~ occ.cov, 
                det.formula = ~ det.cov.1 + det.cov.2, 
                data = data.list, 

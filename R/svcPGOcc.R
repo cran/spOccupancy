@@ -1,11 +1,12 @@
 svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning, 
                      svc.cols = 1, cov.model = 'exponential', NNGP = TRUE, 
-		     n.neighbors = 15, search.type = 'cb', n.batch, 
-		     batch.length, accept.rate = 0.43,
-		     n.omp.threads = 1, verbose = TRUE, n.report = 100, 
-		     n.burn = round(.10 * n.batch * batch.length), 
-		     n.thin = 1, n.chains = 1, k.fold, k.fold.threads = 1, 
-		     k.fold.seed = 100, k.fold.only = FALSE, ...){
+                     n.neighbors = 15, search.type = 'cb', n.batch, 
+                     batch.length, accept.rate = 0.43,
+                     n.omp.threads = 1, verbose = TRUE, n.report = 100, 
+                     n.burn = round(.10 * n.batch * batch.length), 
+                     n.thin = 1, n.chains = 1, 
+                     k.fold, k.fold.threads = 1, k.fold.seed = 100, 
+                     k.fold.only = FALSE, ...){
 
   ptm <- proc.time()
 
@@ -846,7 +847,7 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
       }
     }
     beta.star.indx <- rep(0:(p.occ.re - 1), n.occ.re.long)
-    beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+    beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
   } else {
     sigma.sq.psi.inits <- 0
     beta.star.indx <- 0
@@ -876,7 +877,7 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
       }
     }
     alpha.star.indx <- rep(0:(p.det.re - 1), n.det.re.long)
-    alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+    alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
   } else {
     sigma.sq.p.inits <- 0
     alpha.star.indx <- 0
@@ -1097,11 +1098,11 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
           beta.inits <- rnorm(p.occ, mu.beta, sqrt(sigma.beta))
           alpha.inits <- rnorm(p.det, mu.alpha, sqrt(sigma.alpha))
           if (!fixed.params[which(all.params == 'sigma.sq')]) {
-	    if (sigma.sq.ig) {
+            if (sigma.sq.ig) {
               sigma.sq.inits <- rigamma(p.svc, sigma.sq.a, sigma.sq.b)
-	    } else {
+            } else {
               sigma.sq.inits <- runif(p.svc, sigma.sq.a, sigma.sq.b)
-	    }
+            }
           }
           phi.inits <- runif(p.svc, phi.a, phi.b)
           if (cov.model == 'matern') {
@@ -1109,26 +1110,26 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
           }
           if (p.det.re > 0) {
             sigma.sq.p.inits <- runif(p.det.re, 0.5, 10)
-            alpha.star.inits <- rnorm(n.det.re, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
+            alpha.star.inits <- rnorm(n.det.re, 0, sqrt(sigma.sq.p.inits[alpha.star.indx + 1]))
           }
           if (p.occ.re > 0) {
             sigma.sq.psi.inits <- runif(p.occ.re, 0.5, 10)
-            beta.star.inits <- rnorm(n.occ.re, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
+            beta.star.inits <- rnorm(n.occ.re, 0, sqrt(sigma.sq.psi.inits[beta.star.indx + 1]))
           }
         }
         storage.mode(chain.info) <- "integer"
         # Run the model in C    
         out.tmp[[i]] <- .Call("svcPGOccNNGP", y, X, X.w, X.p, coords, X.re, X.p.re, consts, 
         	                    K, n.occ.re.long, n.det.re.long, 
-            	            n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx, 
+                              n.neighbors, nn.indx, nn.indx.lu, u.indx, u.indx.lu, ui.indx, 
                               beta.inits, alpha.inits, sigma.sq.psi.inits, sigma.sq.p.inits, 
         	                    beta.star.inits, alpha.star.inits, z.inits,
                               w.inits, phi.inits, sigma.sq.inits, nu.inits, z.long.indx, 
                               beta.star.indx, beta.level.indx, alpha.star.indx, 
-          		    alpha.level.indx, mu.beta, mu.alpha, 
+                              alpha.level.indx, mu.beta, mu.alpha, 
                               Sigma.beta, Sigma.alpha, phi.a, phi.b, 
                               sigma.sq.a, sigma.sq.b, nu.a, nu.b, 
-          		    sigma.sq.psi.a, sigma.sq.psi.b, sigma.sq.p.a, sigma.sq.p.b, 
+                              sigma.sq.psi.a, sigma.sq.psi.b, sigma.sq.p.a, sigma.sq.p.b, 
         	                    tuning.c, cov.model.indx,
                               n.batch, batch.length, 
                               accept.rate, n.omp.threads, verbose, n.report, 
@@ -1294,6 +1295,7 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
       # Number of sites in each hold out data set. 
       sites.random <- sample(1:J.w)    
       sites.k.fold <- split(sites.random, sites.random %% k.fold)
+      par.k <- parallel::makePSOCKcluster(k.fold.threads)
       registerDoParallel(k.fold.threads)
       model.deviance <- foreach (i = 1:k.fold, .combine = sum) %dopar% {
         curr.set.small <- sort(sites.random[sites.k.fold[[i]]])
@@ -1345,7 +1347,7 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
         if (p.det.re > 0) {	
           alpha.star.indx.fit <- rep(0:(p.det.re - 1), n.det.re.long.fit)
           alpha.level.indx.fit <- sort(unique(c(X.p.re.fit)))
-          alpha.star.inits.fit <- rnorm(n.det.re.fit, 
+          alpha.star.inits.fit <- rnorm(n.det.re.fit, 0,
           			      sqrt(sigma.sq.p.inits[alpha.star.indx.fit + 1]))
           p.re.level.names.fit <- list()
           for (t in 1:p.det.re) {
@@ -1365,7 +1367,7 @@ svcPGOcc <- function(occ.formula, det.formula, data, inits, priors, tuning,
         if (p.occ.re > 0) {	
           beta.star.indx.fit <- rep(0:(p.occ.re - 1), n.occ.re.long.fit)
           beta.level.indx.fit <- sort(unique(c(X.re.fit)))
-          beta.star.inits.fit <- rnorm(n.occ.re.fit, 
+          beta.star.inits.fit <- rnorm(n.occ.re.fit, 0,
           			      sqrt(sigma.sq.psi.inits[beta.star.indx.fit + 1]))
           re.level.names.fit <- list()
           for (t in 1:p.occ.re) {
